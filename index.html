@@ -1,0 +1,1870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DDBA 5.2 — RevOps</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#1A2F6E;--deep:#0F1C42;--gold:#C9A227;--gold2:#E8B84B;
+  --b2:#2B5EC9;--b3:#1E4B9E;--ice:#EFF3FA;--grey:#4A5580;
+  --red:#C0392B;--red2:#E74C3C;--org:#E67E22;--grn:#1A7A3C;--grn2:#00FF88;
+  --money:#00E87A;--stat-grn:#00FF88;--stat-grn-dim:rgba(0,255,136,.15);
+  --ch1:#00E5FF;--ch2:#FF6B35;--ch3:#A855F7;--ch4:#00FF88;--ch5:#FF3CAC;--ch6:#FFD700;
+  --bg:#04080f;--card:#070f1e;--card2:#0a1428;--bdr:rgba(26,47,110,.4);--gold-t:rgba(201,162,39,.25);
+  --fh:'Syne',sans-serif;--fm:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:#e8ecf4;font-family:var(--fm);min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--navy)}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 20% 50%,rgba(26,47,110,.08),transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(201,162,39,.04),transparent 50%);pointer-events:none;z-index:0}
+
+/* HEADER */
+#hdr{position:sticky;top:0;z-index:300;background:rgba(4,8,15,.95);backdrop-filter:blur(20px);border-bottom:1px solid rgba(201,162,39,.15)}
+#hdr-top{display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:56px}
+#brand{display:flex;align-items:center;gap:12px}
+#bmark{width:32px;height:32px;border-radius:6px;background:linear-gradient(135deg,var(--gold),#7a5c0a);display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-weight:800;font-size:12px;color:var(--deep)}
+#btext h1{font-family:var(--fh);font-weight:700;font-size:14px;letter-spacing:.04em}
+#btext h1 em{color:var(--gold);font-style:normal}
+#btext p{color:var(--grey);font-size:7.5px;letter-spacing:.15em;text-transform:uppercase;margin-top:1px}
+#hdr-r{display:flex;align-items:center;gap:18px}
+.hs .hl{color:var(--grey);font-size:7px;letter-spacing:.15em;text-transform:uppercase;margin-bottom:2px}
+.hs .hv{font-family:var(--fh);font-weight:700;font-size:19px;line-height:1;color:var(--gold)}
+.hs .hv.wh{color:#fff}
+#hdiv{width:1px;height:26px;background:rgba(201,162,39,.2)}
+#sync-row{display:flex;align-items:center;gap:8px}
+#sdot{width:6px;height:6px;border-radius:50%;background:var(--grey)}
+#sdot.live{background:var(--grn2);box-shadow:0 0 8px var(--grn2);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+#stext{font-size:8px;color:var(--grey);letter-spacing:.08em}
+#sbtn{background:transparent;border:1px solid rgba(201,162,39,.25);color:var(--gold);padding:4px 10px;border-radius:4px;cursor:pointer;font-family:var(--fm);font-size:8px;transition:all .2s}
+#sbtn:hover{background:rgba(201,162,39,.08)}
+#slast{font-size:7px;color:var(--grey)}
+#nav{display:flex;gap:1px;padding:0 18px;overflow-x:auto}
+#nav::-webkit-scrollbar{display:none}
+.ntab{background:none;border:none;border-bottom:2px solid transparent;color:var(--grey);cursor:pointer;padding:8px 13px;font-family:var(--fm);font-size:8px;letter-spacing:.12em;text-transform:uppercase;transition:all .2s;white-space:nowrap}
+.ntab:hover{color:#fff}
+.ntab.active{color:var(--gold);border-bottom-color:var(--gold)}
+.ntab.fire{color:var(--red2)}.ntab.fire.active{border-bottom-color:var(--red2)}
+.ntab.warn-tab{color:var(--org)}.ntab.warn-tab.active{border-bottom-color:var(--org)}
+
+/* MAIN */
+#main{padding:20px 28px 80px;position:relative;z-index:1}
+.panel{display:none}.panel.active{display:block}
+#cfg{background:rgba(201,162,39,.07);border:1px solid rgba(201,162,39,.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:8.5px;line-height:1.9;display:none}
+#cfg strong{color:var(--gold)}#cfg code{background:rgba(201,162,39,.15);padding:1px 6px;border-radius:3px;font-size:8px}
+
+/* GRID */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:11px}
+.mb12{margin-bottom:12px}.mb18{margin-bottom:18px}.mb22{margin-bottom:22px}
+
+/* CARDS */
+.card{background:linear-gradient(145deg,var(--card),#060d1e);border:1px solid var(--bdr);border-radius:10px;padding:18px 20px;position:relative;overflow:hidden}
+.kcard{background:linear-gradient(145deg,var(--card2),#06101f);border:1px solid var(--bdr);border-left:3px solid var(--gold);border-radius:8px;padding:13px 15px;transition:transform .15s}
+.kcard:hover{transform:translateY(-2px)}
+.kcard.bl{border-left-color:var(--b2)}.kcard.na{border-left-color:var(--navy)}.kcard.rd{border-left-color:var(--red2)}.kcard.gn{border-left-color:var(--grn)}.kcard.or{border-left-color:var(--org)}.kcard.b3{border-left-color:var(--b3)}
+.kl{font-size:7.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--grey);margin-bottom:5px}
+.kv{font-family:var(--fh);font-weight:700;font-size:24px;line-height:1;margin-bottom:2px}
+.ks{font-size:8.5px;color:var(--grey)}
+.kv.big{font-size:32px}.kv.gd{color:var(--gold)}.kv.rd{color:var(--red2)}.kv.gn{color:var(--grn2)}.kv.bl{color:var(--b2)}.kv.mn{color:var(--money);text-shadow:0 0 20px rgba(0,232,122,.35)}.kv.sg{color:var(--stat-grn);text-shadow:0 0 18px rgba(0,255,136,.3)}
+.cc{background:linear-gradient(160deg,var(--card),#06101f);border:1px solid var(--bdr);border-radius:12px;padding:18px 18px 10px;overflow:hidden}
+.eye{font-size:7.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:3px}
+.ttl{font-family:var(--fh);font-weight:700;font-size:16px;color:#fff;margin-bottom:14px}
+.mcc{background:linear-gradient(160deg,#091428,var(--deep));border-radius:10px;padding:12px 11px 5px;border:1px solid var(--bdr)}
+.mcc .mt{font-size:7.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px}
+.sdiv{height:1px;background:linear-gradient(90deg,transparent,var(--navy),transparent);margin:20px 0}
+
+/* DAILY PULSE */
+#pulse-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+#pulse-date{font-family:var(--fh);font-weight:800;font-size:20px}
+#pulse-sub{color:var(--grey);font-size:8px;letter-spacing:.12em;text-transform:uppercase;margin-top:3px}
+#pulse-pill{padding:7px 18px;border-radius:20px;font-family:var(--fh);font-weight:700;font-size:12px;letter-spacing:.08em;transition:all .3s;border:1px solid transparent}
+#pulse-pill.on{background:rgba(26,122,60,.2);border-color:rgba(46,204,113,.35);color:var(--grn2)}
+#pulse-pill.watch{background:rgba(201,162,39,.15);border-color:rgba(201,162,39,.4);color:var(--gold)}
+#pulse-pill.behind{background:rgba(192,57,43,.15);border-color:rgba(231,76,60,.4);color:var(--red2)}
+.tbar{margin-bottom:11px}
+.tbar-top{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px}
+.tbar-lbl{font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey)}
+.tbar-right{display:flex;align-items:baseline;gap:6px}
+.tbar-cur{font-family:var(--fh);font-weight:700;font-size:15px}
+.tbar-tgt{font-size:9px;color:var(--grey)}
+.tbar-pct{font-size:8px;font-weight:700;padding:1px 7px;border-radius:10px}
+.tbar-track{height:5px;background:rgba(26,47,110,.35);border-radius:3px;overflow:hidden}
+.tbar-fill{height:100%;border-radius:3px;transition:width 1.1s cubic-bezier(.23,1,.32,1)}
+.vcard{background:var(--card2);border-radius:10px;padding:14px 16px;border:1px solid var(--bdr);position:relative;overflow:hidden}
+.vstripe{position:absolute;left:0;top:0;bottom:0;width:3px}
+.vname{font-family:var(--fh);font-weight:700;font-size:14px;margin-bottom:1px}
+.vrole{font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:10px}
+.vstats{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px}
+.vsl{font-size:7px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey)}
+.vsv{font-family:var(--fh);font-weight:700;font-size:14px}
+.vbadge{display:inline-block;padding:3px 10px;border-radius:10px;font-size:7.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;border:1px solid transparent}
+.vbadge.on{background:rgba(26,122,60,.2);color:var(--grn2);border-color:rgba(46,204,113,.3)}
+.vbadge.watch{background:rgba(201,162,39,.12);color:var(--gold);border-color:rgba(201,162,39,.3)}
+.vbadge.off{background:rgba(192,57,43,.15);color:var(--red2);border-color:rgba(231,76,60,.3)}
+.dfunnel{display:flex;align-items:flex-end;gap:8px;height:110px;padding:0 8px}
+.ptog{display:flex;gap:6px;margin-bottom:14px}
+.ptog button{background:var(--card);border:1px solid var(--border);color:var(--grey);font-size:10px;font-weight:700;letter-spacing:.06em;padding:5px 14px;border-radius:20px;cursor:pointer;transition:all .18s;font-family:var(--fh)}
+.ptog button.active{background:var(--gold);border-color:var(--gold);color:var(--deep)}
+.df-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px}
+.df-val{font-family:var(--fh);font-weight:700;font-size:13px}
+.df-track{width:100%;background:rgba(26,47,110,.3);border-radius:4px;overflow:hidden;flex:1;display:flex;align-items:flex-end}
+.df-fill{width:100%;border-radius:4px;transition:height 1s cubic-bezier(.23,1,.32,1);min-height:4px}
+.df-lbl{font-size:7px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);text-align:center}
+.df-pct{font-size:7.5px;color:var(--grey);margin-top:1px}
+.df-arrow{color:var(--grey);font-size:9px;padding-bottom:12px;align-self:center}
+.kwtbl{width:100%;border-collapse:collapse;font-size:9px}
+.kwtbl th{background:var(--deep);color:var(--grey);padding:7px 11px;text-align:left;font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--bdr)}
+.kwtbl td{padding:8px 11px;border-bottom:1px solid rgba(26,47,110,.15)}
+.kwtbl tr:hover td{background:rgba(43,94,201,.07)}
+
+/* LEAK DETECTOR */
+.lgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-bottom:16px}
+.lcard{background:var(--card2);border-radius:12px;padding:17px 18px;border:1px solid var(--bdr);position:relative;overflow:hidden}
+.lstripe{position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:12px 0 0 12px}
+.lled{position:absolute;top:15px;right:15px;width:9px;height:9px;border-radius:50%}
+.lled.ok{background:var(--grn);box-shadow:0 0 8px var(--grn)}
+.lled.warn{background:var(--gold);box-shadow:0 0 8px var(--gold);animation:blink 2s infinite}
+.lled.fire{background:var(--red2);box-shadow:0 0 10px var(--red2);animation:blink 1s infinite}
+.lic{font-size:20px;margin-bottom:7px}
+.lname{font-family:var(--fh);font-weight:700;font-size:13px;margin-bottom:3px}
+.ldesc{font-size:8px;color:var(--grey);line-height:1.6;margin-bottom:12px}
+.lmeter{height:7px;background:rgba(26,47,110,.3);border-radius:4px;margin-bottom:7px;overflow:hidden}
+.lfill{height:100%;border-radius:4px;transition:width 1s cubic-bezier(.23,1,.32,1)}
+.lreading{display:flex;justify-content:space-between;align-items:baseline}
+.lval{font-family:var(--fh);font-weight:700;font-size:22px}
+.lthr{font-size:7.5px;color:var(--grey)}
+.lnote{font-size:8px;margin-top:9px;padding:6px 9px;border-radius:6px;line-height:1.6}
+.lnote.ok{background:rgba(26,122,60,.1);color:var(--grn2)}
+.lnote.warn{background:rgba(201,162,39,.1);color:var(--gold)}
+.lnote.fire{background:rgba(192,57,43,.1);color:var(--red2)}
+
+/* REP VIEWS */
+.rhdr{display:flex;align-items:center;gap:14px;padding:16px 20px;border-radius:12px;margin-bottom:20px;background:linear-gradient(135deg,var(--card2),#06101c);border:1px solid rgba(201,162,39,.12)}
+.ravatar{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-weight:800;font-size:17px;color:var(--deep)}
+.rinfo h2{font-family:var(--fh);font-weight:700;font-size:20px}
+.rinfo p{color:var(--grey);font-size:8px;letter-spacing:.1em;text-transform:uppercase;margin-top:2px}
+.rbadge{margin-left:auto;background:rgba(201,162,39,.08);border:1px solid rgba(201,162,39,.25);border-radius:6px;padding:5px 12px;font-size:7.5px;letter-spacing:.12em;color:var(--gold);text-transform:uppercase}
+.frow{margin-bottom:10px}
+.fmeta{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.flbl{font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey)}
+.fval{font-family:var(--fh);font-weight:700;font-size:15px}
+.ftrack{height:6px;background:rgba(26,47,110,.35);border-radius:3px;overflow:hidden}
+.ffill{height:100%;border-radius:3px;transition:width .9s cubic-bezier(.23,1,.32,1)}
+.rcard{background:linear-gradient(145deg,var(--card2),#06101f);border-left:3px solid var(--gold);border-radius:10px;padding:16px 18px}
+.rl{font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-bottom:5px}
+.rv{font-family:var(--fh);font-weight:800;font-size:36px;line-height:1;margin-bottom:3px}
+.rs{font-size:8.5px;color:var(--grey)}
+
+/* DATA ENTRY */
+.esec{background:linear-gradient(160deg,var(--card),var(--deep));border:1px solid rgba(43,94,201,.22);border-radius:12px;padding:22px;margin-bottom:16px}
+.esec h3{font-family:var(--fh);font-weight:700;font-size:18px;margin-bottom:3px}
+.esub{color:var(--grey);font-size:8.5px;letter-spacing:.07em;margin-bottom:18px}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg label{font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey)}
+.fg input,.fg select{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#fff;padding:8px 11px;border-radius:6px;font-family:var(--fm);font-size:10px;transition:border-color .2s;outline:none;width:100%}
+.fg input:focus,.fg select:focus{border-color:var(--gold)}
+.fg select option{background:var(--deep)}
+.erow{display:grid;gap:10px;margin-bottom:10px}
+.r2{grid-template-columns:repeat(2,1fr)}.r3{grid-template-columns:repeat(3,1fr)}.r4{grid-template-columns:repeat(4,1fr)}.r5{grid-template-columns:repeat(5,1fr)}
+.slbl{font-size:7.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);padding:7px 0 8px;border-top:1px solid rgba(201,162,39,.15);margin-top:6px}
+.brow{display:flex;gap:10px;margin-top:16px;align-items:center}
+.bprim{background:linear-gradient(135deg,var(--gold),#7a5c0a);border:none;color:var(--deep);padding:10px 26px;border-radius:6px;font-family:var(--fh);font-weight:700;font-size:12px;letter-spacing:.06em;cursor:pointer;transition:all .2s}
+.bprim:hover{transform:translateY(-1px);box-shadow:0 4px 18px rgba(201,162,39,.3)}
+.conf{color:var(--gold);font-size:8.5px;letter-spacing:.1em;align-items:center;gap:6px;margin-top:8px;display:none}
+.conf.show{display:flex}
+
+/* TABLES */
+.dtbl{width:100%;border-collapse:collapse;font-size:9px}
+.dtbl th{background:var(--deep);color:var(--grey);padding:8px 11px;text-align:left;font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--bdr)}
+.dtbl td{padding:8px 11px;border-bottom:1px solid rgba(26,47,110,.13)}
+.dtbl tr:hover td{background:rgba(43,94,201,.06)}
+
+.sec-hdr{font-family:var(--fh);font-weight:700;font-size:16px;color:#fff;margin:16px 0 12px;letter-spacing:.02em}
+.kc{background:linear-gradient(145deg,var(--card2),#06101f);border:1px solid var(--bdr);border-radius:8px;padding:13px 15px}
+.kc .kl{font-size:7.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--grey);margin-bottom:5px}
+.kc .kv{font-family:var(--fh);font-weight:700;font-size:20px;line-height:1}
+.kc .kv.wh{color:#fff}
+.card-hdr{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:10px}
+/* FOOTER */
+#ftr{margin-top:48px;border-top:1px solid rgba(26,47,110,.4);padding-top:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+#ftr p{color:var(--grey);font-size:7.5px;letter-spacing:.1em}
+#ftr span{color:var(--gold)}
+
+/* ═══════════════════════════════════════════
+   MOBILE RESPONSIVE
+═══════════════════════════════════════════ */
+.ch-wrap{height:140px;position:relative}
+@media(min-width:768px){.ch-wrap{height:160px}}
+
+/* Make chart canvas crisp on all screens */
+canvas{image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges}
+
+@media(max-width:767px){
+  #hdr-top{padding:0 14px;height:52px;flex-wrap:wrap;gap:6px}
+  #brand{min-width:0}
+  #btext h1{font-size:11px}
+  #btext p{font-size:6.5px}
+  #hdr-r{gap:10px}
+  .hs .hv{font-size:15px}
+  .hs .hl{font-size:6.5px}
+  #slast{display:none}
+  #nav{padding:0 8px;gap:0}
+  .ntab{padding:7px 9px;font-size:7.5px;letter-spacing:.08em}
+  #main{padding:14px 12px 60px}
+  .g2,.g3,.g4,.g5{grid-template-columns:1fr 1fr;gap:9px}
+  .g2.force-1,.full-mobile{grid-template-columns:1fr}
+  .erow.r3,.erow.r4,.erow.r5{grid-template-columns:1fr 1fr}
+  .erow.r2{grid-template-columns:1fr 1fr}
+  .kv{font-size:20px}
+  .kv.big{font-size:26px}
+  .rv{font-size:28px}
+  .lname{font-size:12px}
+  .lval{font-size:18px}
+  .ttl{font-size:13px}
+  .card{padding:14px 13px}
+  .rhdr{padding:12px 14px;gap:10px}
+  .ravatar{width:36px;height:36px;font-size:14px}
+  .rinfo h2{font-size:16px}
+  .dfunnel{height:80px;gap:4px;padding:0 2px}
+  .df-val{font-size:11px}
+  .df-lbl{font-size:6.5px}
+  .lgrid{grid-template-columns:1fr;gap:10px}
+  .vstats{grid-template-columns:1fr 1fr}
+  #pulse-date{font-size:15px}
+  .dtbl{font-size:8.5px}
+  .dtbl th{font-size:7px;padding:6px 7px}
+  .dtbl td{padding:6px 7px}
+  /* hide less critical table cols on mobile */
+  .dtbl .hide-mob{display:none}
+  .esec{padding:16px 14px}
+  .esec h3{font-size:15px}
+  .rcard{padding:12px 14px}
+}
+
+@media(max-width:480px){
+  .g4{grid-template-columns:1fr 1fr}
+  .erow.r3,.erow.r4,.erow.r5{grid-template-columns:1fr 1fr}
+  #btext p{display:none}
+  .hs:first-child{display:none}
+  #hdiv{display:none}
+  .ch-wrap{height:110px}
+  .kv{font-size:18px}
+}
+
+</style>
+</head>
+<body>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONFIG — PASTE YOUR 4 GOOGLE SHEET CSV URLS HERE
+// ═══════════════════════════════════════════════════════════
+const SHEET_URLS = {
+  master:    "https://docs.google.com/spreadsheets/d/e/2PACX-1vTpithlceKrmDuXiYLbcob_7K24i84x6qx7gtxL4q_EfJ14BhOpaQFhL3skQMlgGA/pub?gid=1939026422&single=true&output=csv",
+  jp:        "https://docs.google.com/spreadsheets/d/e/2PACX-1vTpithlceKrmDuXiYLbcob_7K24i84x6qx7gtxL4q_EfJ14BhOpaQFhL3skQMlgGA/pub?gid=1722976356&single=true&output=csv",
+  liz:       "https://docs.google.com/spreadsheets/d/e/2PACX-1vTpithlceKrmDuXiYLbcob_7K24i84x6qx7gtxL4q_EfJ14BhOpaQFhL3skQMlgGA/pub?gid=1915234691&single=true&output=csv",
+  dominique: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTpithlceKrmDuXiYLbcob_7K24i84x6qx7gtxL4q_EfJ14BhOpaQFhL3skQMlgGA/pub?gid=1069992317&single=true&output=csv",
+  frank:     "https://docs.google.com/spreadsheets/d/e/2PACX-1vTpithlceKrmDuXiYLbcob_7K24i84x6qx7gtxL4q_EfJ14BhOpaQFhL3skQMlgGA/pub?gid=36022886&single=true&output=csv",
+};
+
+// ═══════════════════════════════════════════════════════════
+// TARGETS — Edit these to match your goals
+// Daily = what one rep should hit per day
+// Weekly = team total per week (5 working days)
+// Monthly = team total per month
+// ═══════════════════════════════════════════════════════════
+const TGT = {
+  // DAILY targets (used for yesterday vs target comparison)
+  daily: { dms:150, convos:80, qual:20, booked:5, shows:4, closes:1, cash:5000, adSpend:180, messages:20 },
+  // WEEKLY targets
+  weekly: { dms:750, convos:400, qual:100, booked:25, shows:20, closes:5, cash:25000 },
+  // MONTHLY targets
+  monthly: { dms:3000, convos:1600, qual:400, booked:100, shows:80, closes:20, cash:100000, adSpend:5000, roas:8 },
+};
+
+// ─── PER-REP TARGETS ─────────────────────────────────────
+// Loaded from localStorage so they persist across sessions.
+// Editable on each rep page via target input panels.
+const DEFAULT_REP_TGTS = {
+  jp:  { shows:20, closes:5, contracted:25000, collected:22000, offerRate:80 },
+  liz: { booked:25, shows:18, inbound:400, qualified:80, bookRate:30 },
+  dom: { booked:20, shows:15, closes:5, contracted:12000, collected:10000 },
+};
+function loadRepTgts(){
+  try{
+    return {
+      jp:  Object.assign({},DEFAULT_REP_TGTS.jp,  JSON.parse(localStorage.getItem('ddba_tgt_jp')||'{}')),
+      liz: Object.assign({},DEFAULT_REP_TGTS.liz, JSON.parse(localStorage.getItem('ddba_tgt_liz')||'{}')),
+      dom: Object.assign({},DEFAULT_REP_TGTS.dom, JSON.parse(localStorage.getItem('ddba_tgt_dom')||'{}')),
+    };
+  }catch{return DEFAULT_REP_TGTS;}
+}
+function saveRepTgt(rep, key, val){
+  const cur=JSON.parse(localStorage.getItem('ddba_tgt_'+rep)||'{}');
+  cur[key]=Number(val); localStorage.setItem('ddba_tgt_'+rep, JSON.stringify(cur));
+  REP_TGTS=loadRepTgts(); renderPulse(); renderJP(); renderLiz(); renderDom();
+}
+let REP_TGTS = loadRepTgts();
+
+// Helper: render a target input row inside a rep page
+function tgtRow(rep, key, label, prefix){
+  const cur = REP_TGTS[rep][key] || 0;
+  return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(26,47,110,.18)">
+    <span style="font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey)">${label}</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:7.5px;color:var(--grey)">Target:</span>
+      <input type="number" value="${cur}" min="0"
+        style="width:90px;background:rgba(255,255,255,.05);border:1px solid rgba(201,162,39,.3);color:var(--gold);padding:4px 8px;border-radius:5px;font-family:var(--fm);font-size:10px;text-align:right"
+        onchange="saveRepTgt('${rep}','${key}',this.value)"
+        oninput="saveRepTgt('${rep}','${key}',this.value)">
+    </div>
+  </div>`;
+}
+
+// REP_TGTS loaded above via loadRepTgts()
+
+// Leak thresholds
+const THR = { showRate:.70, qualRate:.18, closeRate:.50, collectRate:.80, noShowRate:.30, deadKwRatio:.08 };
+
+// ─── DEMO DATA ───────────────────────────────────────────
+const DEMO = {
+  monthly:[
+    {month:"Jan",booked:14,taken:16,offers:9,noShows:13,cancelled:2,followUps:8,deposits:1,closes:1,sales:7500,revenue:750},
+    {month:"Feb",booked:23,taken:14,offers:9,noShows:8,cancelled:1,followUps:8,deposits:1,closes:5,sales:35500,revenue:31500},
+    ...["Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map(m=>({month:m,booked:0,taken:0,offers:0,noShows:0,cancelled:0,followUps:0,deposits:0,closes:0,sales:0,revenue:0}))
+  ],
+  liz:[
+    {date:"2026-02-24",platform:"Instagram",keywords:"SHARK,SUCCESS,BUILDER",kw_blocks:"SHARK",kw_links:"SUCCESS",inbound:142,convos:68,qualified:18,disqualified:8,minors:2,disqual_reason:"No capital",links_sent:12,booked:4,avg_first:4,avg_convo:8,followups:22,outbound_dms:35,outbound_fu:18,no_book_reason:"Need to think",fix:"Follow up faster",shows:3,noshows:1},
+    {date:"2026-02-25",platform:"Instagram",keywords:"SHARK,MENTOR,APPLY",kw_blocks:"MENTOR",kw_links:"SHARK",inbound:158,convos:74,qualified:21,disqualified:11,minors:1,disqual_reason:"Not serious",links_sent:15,booked:5,avg_first:3,avg_convo:7,followups:28,outbound_dms:40,outbound_fu:22,no_book_reason:"No time",fix:"Follow up sooner",shows:4,noshows:1},
+    {date:"2026-02-26",platform:"Instagram",keywords:"SHARK,SUCCESS",kw_blocks:"SHARK",kw_links:"SHARK",inbound:131,convos:59,qualified:14,disqualified:9,minors:0,disqual_reason:"No credit",links_sent:10,booked:3,avg_first:5,avg_convo:9,followups:19,outbound_dms:28,outbound_fu:14,no_book_reason:"Price concern",fix:"Frame value earlier",shows:2,noshows:1},
+  ],
+  dominique:[
+    {date:"2026-02-24",platform:"Instagram",keywords:"BUILDER,MENTOR",kw_blocks:"BUILDER",kw_links:"MENTOR",inbound:88,convos:41,qualified:11,disqualified:5,minors:1,disqual_reason:"Too young (minor)",links_sent:8,booked:3,avg_first:5,avg_convo:10,followups:14,outbound_dms:20,outbound_fu:10,no_book_reason:"Timing",fix:"More urgency",shows:2,noshows:1,offers:2,closes:1,revenue:750,newcash:750,handoffs:1},
+    {date:"2026-02-25",platform:"Instagram",keywords:"BUILDER,APPLY",kw_blocks:"APPLY",kw_links:"BUILDER",inbound:95,convos:44,qualified:13,disqualified:6,minors:0,disqual_reason:"No capital",links_sent:9,booked:4,avg_first:4,avg_convo:8,followups:16,outbound_dms:24,outbound_fu:12,no_book_reason:"Need info",fix:"Send case study",shows:3,noshows:1,offers:3,closes:1,revenue:500,newcash:500,handoffs:2},
+  ],
+  jp:[
+    {date:"2026-02-06",prospect:"Ryan B",setter:"Liz",showed:"Yes",offered:"Yes",closed:"Yes - PIF",contracted:5000,collected:5000,notes:""},
+    {date:"2026-02-11",prospect:"Skylar W",setter:"Dom",showed:"Yes",offered:"Yes",closed:"Yes - Split",contracted:5000,collected:3000,notes:"Balance due 3/1"},
+    {date:"2026-02-17",prospect:"Carlos F",setter:"Dom",showed:"Yes",offered:"Yes",closed:"Yes - PIF",contracted:5000,collected:5000,notes:""},
+    {date:"2026-02-20",prospect:"Marcus T",setter:"Liz",showed:"Yes",offered:"Yes",closed:"No",contracted:0,collected:0,notes:"Follow up"},
+    {date:"2026-02-25",prospect:"Jamie G",setter:"Liz",showed:"Yes",offered:"Yes",closed:"Yes - PIF",contracted:5000,collected:5000,notes:""},
+  ],
+};
+
+// ─── STATE ───────────────────────────────────────────────
+let DATA = {
+  monthly:[...DEMO.monthly], liz:[...DEMO.liz],
+  dominique:[...DEMO.dominique], jp:[...DEMO.jp],
+  frank:[
+    {date:"2026-01-07",adSpend:116.34,messages:16,cpm:7.27,reach:5996,callsBooked:0,demosTaken:2,offers:1,noShows:0,cancelled:0,closes:0,contractedRevenue:0,newCash:0,recurringCash:0},
+    {date:"2026-01-08",adSpend:135.89,messages:16,cpm:8.49,reach:7188,callsBooked:0,demosTaken:1,offers:1,noShows:3,cancelled:0,closes:0,contractedRevenue:5000,newCash:0,recurringCash:0},
+    {date:"2026-01-13",adSpend:122.42,messages:10,cpm:12.24,reach:5190,callsBooked:0,demosTaken:1,offers:2,noShows:1,cancelled:0,closes:1,contractedRevenue:1000,newCash:500,recurringCash:400},
+    {date:"2026-01-14",adSpend:134.26,messages:15,cpm:8.95,reach:5450,callsBooked:1,demosTaken:0,offers:0,noShows:1,cancelled:0,closes:1,contractedRevenue:997,newCash:997,recurringCash:0},
+    {date:"2026-01-15",adSpend:145.02,messages:17,cpm:8.53,reach:5092,callsBooked:0,demosTaken:1,offers:1,noShows:0,cancelled:0,closes:1,contractedRevenue:1176,newCash:147,recurringCash:0},
+    {date:"2026-01-19",adSpend:141.08,messages:13,cpm:10.85,reach:4772,callsBooked:1,demosTaken:2,offers:1,noShows:2,cancelled:0,closes:2,contractedRevenue:3176,newCash:2147,recurringCash:0},
+    {date:"2026-01-20",adSpend:95.13,messages:4,cpm:23.78,reach:3063,callsBooked:3,demosTaken:1,offers:1,noShows:0,cancelled:2,closes:1,contractedRevenue:7500,newCash:750,recurringCash:0},
+    {date:"2026-01-21",adSpend:111.35,messages:7,cpm:15.91,reach:3520,callsBooked:3,demosTaken:1,offers:0,noShows:0,cancelled:0,closes:0,contractedRevenue:0,newCash:0,recurringCash:250},
+    {date:"2026-01-28",adSpend:121.93,messages:22,cpm:5.54,reach:4266,callsBooked:4,demosTaken:2,offers:1,noShows:1,cancelled:0,closes:0,contractedRevenue:0,newCash:0,recurringCash:0},
+    {date:"2026-02-06",adSpend:130,messages:18,cpm:7.22,reach:5200,callsBooked:1,demosTaken:1,offers:1,noShows:0,cancelled:0,closes:1,contractedRevenue:5000,newCash:5000,recurringCash:0},
+    {date:"2026-02-11",adSpend:128,messages:20,cpm:6.40,reach:5800,callsBooked:1,demosTaken:1,offers:1,noShows:0,cancelled:0,closes:1,contractedRevenue:5000,newCash:3000,recurringCash:0},
+    {date:"2026-02-17",adSpend:135,messages:22,cpm:6.14,reach:6100,callsBooked:1,demosTaken:1,offers:1,noShows:0,cancelled:0,closes:1,contractedRevenue:5000,newCash:5000,recurringCash:0},
+    {date:"2026-02-25",adSpend:141,messages:19,cpm:7.42,reach:5500,callsBooked:1,demosTaken:1,offers:1,noShows:0,cancelled:0,closes:1,contractedRevenue:5000,newCash:5000,recurringCash:0},
+  ]
+};
+let CHS={}, connected=false, MK_PERIOD="monthly", PULSE_PERIOD="daily";
+
+function setPulsePeriod(p){
+  PULSE_PERIOD=p;
+  document.querySelectorAll(".pulse-tog button").forEach(b=>b.classList.toggle("active",b.dataset.p===p));
+  renderPulse();
+}
+function setMkPeriod(p){
+  MK_PERIOD=p;
+  document.querySelectorAll(".mk-tog button").forEach(b=>b.classList.toggle("active",b.dataset.p===p));
+  renderMarketing();
+}
+const LS={jp:"ddba_jp",liz:"ddba_liz",dom:"ddba_dom"};
+
+// ─── CHART HELPERS ───────────────────────────────────────
+const CC={navy:"#1A2F6E",deep:"#0F1C42",gold:"#C9A227",gold2:"#E8B84B",b2:"#2B5EC9",b3:"#1E4B9E",grey:"#4A5580",red2:"#E74C3C",org:"#E67E22",grn:"#1A7A3C",grn2:"#00FF88",
+  // VIBRANT chart palette — pops off dark bg
+  cyan:"#00E5FF",orange:"#FF6B35",purple:"#A855F7",green:"#00FF88",pink:"#FF3CAC",yellow:"#FFD700",teal:"#00FFC8",lime:"#BFFF00"};
+Chart.defaults.color="#4A5580"; Chart.defaults.font.family="'JetBrains Mono',monospace"; Chart.defaults.font.size=9;
+Chart.defaults.devicePixelRatio=window.devicePixelRatio||2;
+const ax=()=>({grid:{color:"rgba(26,47,110,.3)",drawBorder:false},ticks:{color:"#4A5580",font:{size:9}},border:{display:false}});
+const tt=()=>({backgroundColor:CC.deep,borderColor:CC.gold+"44",borderWidth:1,titleColor:CC.gold,bodyColor:"#fff",padding:10,titleFont:{family:"'JetBrains Mono',monospace",size:9},bodyFont:{family:"'JetBrains Mono',monospace",size:10}});
+
+function mkChart(id,cfg){if(CHS[id])CHS[id].destroy();const c=document.getElementById(id);if(c)CHS[id]=new Chart(c,cfg)}
+function donut(id,vals,colors,labels){
+  mkChart(id,{type:"doughnut",data:{labels,datasets:[{data:vals,backgroundColor:colors.map(c=>c+"cc"),borderColor:colors,borderWidth:2,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:"70%",plugins:{legend:{display:false},tooltip:tt()}}});
+}
+function area(id,labels,datasets){
+  mkChart(id,{type:"line",data:{labels,datasets:datasets.map(ds=>({fill:true,tension:.45,borderWidth:2.5,pointRadius:3.5,pointHoverRadius:7,
+    pointBackgroundColor:ds.color,pointBorderColor:"#04080f",pointBorderWidth:1.5,borderColor:ds.color,
+    backgroundColor:ctx=>{const g=ctx.chart.ctx.createLinearGradient(0,0,0,ctx.chart.height||220);g.addColorStop(0,ds.color+"55");g.addColorStop(.6,ds.color+"18");g.addColorStop(1,ds.color+"00");return g},...ds}))},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    plugins:{legend:{display:datasets.length>1,labels:{color:"#e8ecf4",font:{size:9},boxWidth:10,padding:14}},tooltip:tt()},
+    scales:{x:ax(),y:{...ax(),ticks:{...ax().ticks,callback:v=>v>=1000?"$"+Math.round(v/1000)+"k":v}}}}});
+}
+function bars(id,labels,datasets){
+  mkChart(id,{type:"bar",data:{labels,datasets:datasets.map(ds=>({borderRadius:4,borderSkipped:false,...ds}))},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},plugins:{legend:{display:datasets.length>1,labels:{color:"#4A5580",font:{size:9},boxWidth:10}},tooltip:tt()},scales:{x:ax(),y:{...ax(),ticks:{...ax().ticks,callback:v=>v>=1000?"$"+Math.round(v/1000)+"k":v}}}}});
+}
+function mini(id,labels,data,color){
+  mkChart(id,{type:"line",data:{labels,datasets:[{data,borderColor:color,borderWidth:2,fill:true,tension:.45,
+    backgroundColor:ctx=>{const g=ctx.chart.ctx.createLinearGradient(0,0,0,ctx.chart.height||140);g.addColorStop(0,color+"66");g.addColorStop(.5,color+"22");g.addColorStop(1,color+"00");return g},
+    pointRadius:3,pointBackgroundColor:color,pointBorderColor:"#04080f",pointBorderWidth:1.5,pointHoverRadius:6,
+    shadowColor:color,shadowBlur:8}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:tt()},
+    scales:{x:{...ax(),ticks:{...ax().ticks,maxTicksLimit:6}},y:{...ax(),ticks:{...ax().ticks,maxTicksLimit:5}}}}});
+}
+
+// ─── UTILS ───────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+const val=id=>$(id)?$(id).value:"";
+const set=(id,v)=>{if($(id))$(id).textContent=v};
+const pct=(n,d)=>d?(n/d*100).toFixed(1):"0.0";
+const money=n=>"$"+Number(n||0).toLocaleString();
+const today=()=>new Date().toISOString().slice(0,10);
+const todayFmt=()=>new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"});
+const agg=(arr,k)=>(arr||[]).reduce((a,d)=>a+(+d[k]||0),0);
+const todayRows=(arr,dk="date")=>(arr||[]).filter(d=>String(d[dk]||"").startsWith(today()));
+const last7=(arr,dk="date")=>{const c=new Date();c.setDate(c.getDate()-7);return(arr||[]).filter(d=>{try{return new Date(d[dk])>=c}catch{return false}})};
+const thisMonth=(arr,dk="date")=>{const n=new Date();const y=n.getFullYear(),m=String(n.getMonth()+1).padStart(2,"0");return(arr||[]).filter(d=>String(d[dk]||"").startsWith(`${y}-${m}`))};
+const thisWeek=(arr,dk="date")=>{const n=new Date();const dow=n.getDay();const mon=new Date(n);mon.setDate(n.getDate()-(dow===0?6:dow-1));mon.setHours(0,0,0,0);return(arr||[]).filter(d=>{try{return new Date(d[dk])>=mon}catch{return false}})};
+function g(d,keys){for(const k of keys){const v=+d[k];if(d[k]!==undefined&&d[k]!==''&&!isNaN(v))return v;}return 0;}
+function totals(arr){
+  return(arr||[]).reduce((a,d)=>({
+    booked:   (a.booked||0)   + g(d,['booked','callsBooked','sessionsBooked','totalBooked']),
+    taken:    (a.taken||0)    + g(d,['taken','demosTaken','callsTaken','sessionsTaken','totalTaken']),
+    offers:   (a.offers||0)   + g(d,['offers','offersMade','totalOffers']),
+    noShows:  (a.noShows||0)  + g(d,['noShows','noShow','totalNoShows']),
+    cancelled:(a.cancelled||0)+ g(d,['cancelled','canceled','totalCancelled']),
+    followUps:(a.followUps||0)+ g(d,['followUps','followUp','totalFollowUps']),
+    deposits: (a.deposits||0) + g(d,['deposits','deposit','depositPaymentPlan','paymentPlan']),
+    closes:   (a.closes||0)   + g(d,['closes','close','totalCloses','totalClosed']),
+    sales:    (a.sales||0)    + g(d,['sales','contracted','contractedRevenue','totalContracted','totalSales']),
+    revenue:  (a.revenue||0)  + g(d,['revenue','collected','cashCollected','newCash','newCashCollected','totalCollected']),
+  }),{})
+}
+const saveL=(k,e)=>{const a=JSON.parse(localStorage.getItem(k)||"[]");a.push(e);localStorage.setItem(k,JSON.stringify(a))};
+const loadL=k=>JSON.parse(localStorage.getItem(k)||"[]");
+
+// ─── SHEETS SYNC ─────────────────────────────────────────
+function toKey(s){
+  // Robust normalizer: handles ALL CAPS, Title Case, mixed, symbols
+  return s.trim().replace(/[^a-zA-Z0-9\s]/g," ").toLowerCase().trim()
+    .replace(/\s+(\w)/g,(_,c)=>c.toUpperCase()).replace(/\s+/g,"");
+}
+// Alias map: normalize sheet header variations -> dashboard camelCase keys
+const KEY_ALIAS={
+  // booked
+  callsBooked:"booked", callbooked:"booked", bookedCalls:"booked",
+  sessionBooked:"booked", sessionsBooked:"booked", totalBooked:"booked",
+  // taken / demos
+  demoTaken:"taken", demosTaken:"taken", demotaken:"taken", demoTakens:"taken",
+  callsTaken:"taken", sessionsTaken:"taken", totalTaken:"taken",
+  strategySessionsTaken:"taken", ssTaken:"taken",
+  // offers
+  offersMade:"offers", offerMade:"offers", totalOffers:"offers",
+  // noShows
+  noShow:"noShows", noshow:"noShows", noshows:"noShows",
+  totalNoShows:"noShows", noShowTotal:"noShows",
+  // cancelled
+  canceled:"cancelled", cancel:"cancelled", totalCancelled:"cancelled",
+  // followUps
+  followUp:"followUps", followup:"followUps", followups:"followUps",
+  totalFollowUps:"followUps",
+  // deposits
+  depositPaymentPlan:"deposits", deposit:"deposits", depositpaymentplan:"deposits",
+  paymentPlan:"deposits", paymentPlans:"deposits",
+  // closes
+  close:"closes", totalCloses:"closes", closeTotal:"closes",
+  totalClosed:"closes", closedDeals:"closes",
+  // sales / contracted -> "sales" key used by totals()
+  contractedRevenue:"sales", contracted:"sales", totalContracted:"sales",
+  totalSales:"sales", contractedTotal:"sales", revenueContracted:"sales",
+  // revenue / collected -> "revenue" key used by totals()
+  cashCollected:"revenue", collected:"revenue", totalCollected:"revenue",
+  newCashCollected:"revenue", newcashcollected:"revenue",
+  revenueCollected:"revenue", collectedCash:"revenue",
+  // month
+  monthName:"month", monthLabel:"month", label:"month", period:"month",
+  // other
+  newCash:"newCash", newcash:"newCash",
+  recurring:"recurringCash", recurringdollar:"recurringCash",
+  cpa:"cpa", costPerAcquisition:"cpa",
+  adSpend:"adSpend", spend:"adSpend",
+  messages:"messages", leads:"messages",
+};
+function normalizeKey(raw){const k=toKey(raw);return KEY_ALIAS[k]||k;}
+async function fetchCSV(url){
+  if(!url||url.startsWith("PASTE_"))return null;
+  try{
+    const r=await fetch(url+"&t="+Date.now());const t=await r.text();
+    const rows=t.trim().split("\n").map(r=>r.split(",").map(c=>c.trim().replace(/^"|"$/g,"")));
+    if(rows.length<2)return null;
+    // DDBA sheet: Row 0=title, Row 1=camelCase keys, Row 2=human labels, Row 3+=data
+    // Detect by checking if row[1] has more camelCase-looking tokens than row[0]
+    // A camelCase key: no spaces, starts with lowercase OR is a known single-word
+    const isCamel = c => /^[a-z][a-zA-Z0-9]*$/.test(c.trim()) || /^[a-z]+$/.test(c.trim());
+    const r0score = rows[0].filter(isCamel).length;
+    const r1score = rows.length>1 ? rows[1].filter(isCamel).length : 0;
+    let hdrRow, dataStart;
+    if(r1score > r0score && rows.length >= 3){
+      // 3-row header structure (Master Data + rep logs)
+      hdrRow = 1; dataStart = 3;
+    } else {
+      // Simple 1-row header
+      hdrRow = 0; dataStart = 1;
+    }
+    const hdrs=rows[hdrRow].map(normalizeKey);
+    console.log("[DDBA]", url.split("gid=")[1]?.split("&")[0]||"?", "| hdrRow:", hdrRow, "dataStart:", dataStart);
+    console.log("[DDBA] raw:", rows[hdrRow].slice(0,10));
+    console.log("[DDBA] norm:", hdrs.slice(0,10));
+    return rows.slice(dataStart).filter(r=>r.some(c=>c)).map(r=>{
+      const o={};
+      hdrs.forEach((h,i)=>{o[h]=isNaN(r[i])||(r[i]==="")? r[i]||"":Number(r[i])});
+      // Compute CPM if not present: adSpend / messages
+      if(!o.cpm&&o.adSpend&&o.messages)o.cpm=parseFloat((o.adSpend/o.messages).toFixed(2));
+      // Alias cpa from sheet if present
+      if(!o.cpa&&o.adSpend&&o.closes)o.cpa=o.closes>0?parseFloat((o.adSpend/o.closes).toFixed(2)):0;
+      return o;
+    });
+  }catch{return null}
+}
+async function sync(){
+  $("sbtn").textContent="↻ Syncing…"; $("stext").textContent="Fetching…";
+  const[m,j,l,d,fk]=await Promise.all([fetchCSV(SHEET_URLS.master),fetchCSV(SHEET_URLS.jp),fetchCSV(SHEET_URLS.liz),fetchCSV(SHEET_URLS.dominique),fetchCSV(SHEET_URLS.frank)]);
+  if(m)DATA.monthly=m;
+  if(j)DATA.jp=j;
+  if(l)DATA.liz=l;
+  if(d)DATA.dominique=d;
+  if(fk)DATA.frank=fk;
+  // Go live if ANY tab returned data — not just master
+  if(m||j||l||d||fk){connected=true;$("cfg").style.display="none";}
+  $("stext").textContent=connected?"Live · Google Sheets":"Demo mode";
+  if(DATA.monthly&&DATA.monthly.length){console.log("[DDBA] Master first row:",JSON.stringify(DATA.monthly[0]));console.log("[DDBA] Master row count:",DATA.monthly.length);}
+  $("slast").textContent="Updated "+new Date().toLocaleTimeString();
+  $("sbtn").textContent="↻ Sync";
+  if(connected)$("sdot").classList.add("live");
+  rebuild();
+}
+
+// ═══════════════════════════════════════════════════════════
+// DAILY PULSE
+// ═══════════════════════════════════════════════════════════
+function renderPulse(){
+  // Show YESTERDAY's numbers vs daily target
+  const yest=()=>{const d=new Date();d.setDate(d.getDate()-1);return d.toISOString().slice(0,10)};
+  const yesterdayRows=(arr,dk="date")=>(arr||[]).filter(d=>String(d[dk]||"").startsWith(yest()));
+  const lt=yesterdayRows(DATA.liz), dt=yesterdayRows(DATA.dominique), jt=yesterdayRows(DATA.jp,"date");
+  const t_in=agg(lt,"inbound")+agg(dt,"inbound");
+  const t_cv=agg(lt,"convos")+agg(dt,"convos");
+  const t_ql=agg(lt,"qualified")+agg(dt,"qualified");
+  const t_bk=agg(lt,"booked")+agg(dt,"booked");
+  const t_sh=agg(lt,"shows")+agg(dt,"shows")+agg(dt,"taken");
+  const l_bk=agg(lt,"booked"), d_bk=agg(dt,"booked");
+  const l_sh=agg(lt,"shows"), d_sh=agg(dt,"shows")||agg(dt,"taken");
+  const l_ns=agg(lt,"noshows")||agg(lt,"noShows"), d_ns=agg(dt,"noshows")||agg(dt,"noShows");
+  const j_sh=jt.filter(d=>d.showed==="Yes").length;
+  const j_cl=jt.filter(d=>String(d.closed||"").startsWith("Yes")).length;
+  const j_co=agg(jt,"contracted"), j_cd=agg(jt,"collected");
+
+  // Date
+  const parts=todayFmt().split(", ");
+  set("pulse-date",parts[0]+", "+parts[1]);
+
+  const tgts = PULSE_PERIOD==="weekly" ? TGT.weekly : PULSE_PERIOD==="monthly" ? TGT.monthly : TGT.daily;
+  // Merge per-rep targets: override pulse targets with rep-specific ones
+  const jpTgts=REP_TGTS.jp, lizTgts=REP_TGTS.liz, domTgts=REP_TGTS.dom;
+  // Pulse uses rep targets when on monthly view
+  if(PULSE_PERIOD==="monthly"){
+    tgts.closes  = (jpTgts.closes||0) + (domTgts.closes||0);
+    tgts.booked  = (lizTgts.booked||0) + (domTgts.booked||0);
+    tgts.shows   = (jpTgts.shows||0) + (lizTgts.shows||0) + (domTgts.shows||0);
+    tgts.cash    = jpTgts.collected || tgts.cash;
+  }
+  const periodLabel = PULSE_PERIOD==="weekly"?"Weekly Production":PULSE_PERIOD==="monthly"?"Monthly Production":"Daily Production";
+  set("pulse-period-lbl", periodLabel);
+
+  // Status pill uses period-appropriate targets
+  const score=((t_bk/tgts.booked)+(t_sh/tgts.shows)+(j_cl/tgts.closes))/3;
+  const pill=$("pulse-pill");
+  if(pill){pill.textContent=score>=.85?"ON TRACK":score>=.5?"WATCH IT":"BEHIND";pill.className=score>=.85?"on":score>=.5?"watch":"behind";pill.id="pulse-pill";}
+
+  // Target bars helper
+  function tbar(pfx,cur,tgt,color,isDollar){
+    const p=Math.min(100,(cur/tgt)*100);
+    const f=$(pfx+"-f"),cv=$(pfx+"-c"),pv=$(pfx+"-p"),lv=$("tgt-"+pfx.replace("tb-","")+"lbl");
+    if(f){f.style.width=p+"%";f.style.background=color;}
+    if(cv)cv.textContent=isDollar?money(cur):cur;
+    if(lv)lv.textContent="/ "+(isDollar?money(tgt):tgt);
+    if(pv){pv.textContent=p.toFixed(0)+"%";pv.style.background=p>=85?"rgba(26,122,60,.2)":p>=55?"rgba(201,162,39,.15)":"rgba(192,57,43,.15)";pv.style.color=p>=85?"var(--grn2)":p>=55?"var(--gold)":"var(--red2)";}
+  }
+  tbar("tb-dm",   t_in,  tgts.dms,    CC.b2);
+  tbar("tb-cv",   t_cv,  tgts.convos, CC.b3);
+  tbar("tb-ql",   t_ql,  tgts.qual,   CC.grn2);
+  tbar("tb-bk",   t_bk,  tgts.booked, CC.gold);
+  tbar("tb-sh",   t_sh,  tgts.shows,  CC.gold);
+  tbar("tb-cl",   j_cl,  tgts.closes, CC.gold2);
+  tbar("tb-ca",   j_cd,  tgts.cash,   CC.gold,true);
+
+  // Rep verdicts
+  function verdict(name,role,stats,score){
+    const s=score>=.85?"on":score>=.5?"watch":"off";
+    const lbl=s==="on"?"On Track":s==="watch"?"Watch":"Needs Attn";
+    const col=s==="on"?"var(--grn2)":s==="watch"?"var(--gold)":"var(--red2)";
+    return`<div class="vcard"><div class="vstripe" style="background:${col}"></div>
+      <div class="vname">${name}</div><div class="vrole">${role}</div>
+      <div class="vstats">${stats.map(s=>`<div><div class="vsl">${s.l}</div><div class="vsv" style="color:${s.c||"#fff"}">${s.v}</div></div>`).join("")}</div>
+      <span class="vbadge ${s}">${lbl}</span></div>`;
+  }
+  const vc=$("verdicts");
+  if(vc)vc.innerHTML=[
+    verdict("Liz","DM Setter",[{l:"Booked",v:l_bk,c:CC.gold},{l:"Shows",v:l_sh,c:CC.green},{l:"No Shows",v:l_ns,c:CC.red2},{l:"Inbound",v:agg(lt,"inbound"),c:CC.cyan}],l_bk/(REP_TGTS.liz.booked||5)),
+    verdict("Dominique","Setter + Closer",[{l:"Booked",v:d_bk,c:CC.gold},{l:"Shows",v:d_sh,c:CC.green},{l:"Closes",v:agg(dt,"closes"),c:CC.yellow},{l:"Contracted",v:money(agg(dt,"contracted")||agg(dt,"revenue")),c:CC.teal}],d_bk/(REP_TGTS.dom.booked||5)),
+    verdict("JP Campbell","High Ticket Closer",[{l:"Shows",v:j_sh,c:CC.cyan},{l:"Closes",v:j_cl,c:CC.yellow},{l:"Contracted",v:money(j_co),c:CC.teal},{l:"Collected",v:money(j_cd),c:CC.green}],j_cl/(REP_TGTS.jp.closes||1)),
+  ].join("");
+
+  // Day funnel
+  const funnel=[
+    {l:"Inbound",v:t_in,c:CC.b2},{l:"Convos",v:t_cv,c:CC.b3},{l:"Qualified",v:t_ql,c:CC.grn2},
+    {l:"Booked",v:t_bk,c:CC.gold},{l:"Showed",v:t_sh,c:CC.gold2},{l:"Closed",v:j_cl,c:CC.gold},
+  ];
+  const mx=Math.max(...funnel.map(f=>f.v),1);
+  const fc=$("dfunnel");
+  if(fc)fc.innerHTML=funnel.map((f,i)=>{
+    const ph=Math.max(6,(f.v/mx)*100);
+    const conv=i>0?`<div class="df-pct">${pct(f.v,funnel[i-1].v)}%</div>`:"";
+    return`${i>0?'<div class="df-arrow">→</div>':""}<div class="df-wrap">
+      <div class="df-val" style="color:${f.c}">${f.v}</div>
+      <div class="df-track"><div class="df-fill" style="height:${ph}%;background:${f.c}22;border-top:2px solid ${f.c}"></div></div>
+      <div class="df-lbl">${f.l}</div>${conv}</div>`;
+  }).join("");
+
+  // Keyword performance
+  const kwm={};
+  [...lt,...dt].forEach(d=>{
+    const b=String(d.kw_blocks||"").toUpperCase().trim();
+    const lk=String(d.kw_links||"").toUpperCase().trim();
+    if(b){if(!kwm[b])kwm[b]={kw:b,blocks:0,links:0,book:0};kwm[b].blocks++;}
+    if(lk){if(!kwm[lk])kwm[lk]={kw:lk,blocks:0,links:0,book:0};kwm[lk].links++;kwm[lk].book+=(+d.booked||0);}
+    String(d.keywords||"").split(",").map(k=>k.trim().toUpperCase()).filter(Boolean).forEach(k=>{if(!kwm[k])kwm[k]={kw:k,blocks:0,links:0,book:0};});
+  });
+  const kwrows=Object.values(kwm).sort((a,b)=>b.book-a.book);
+  const kb=$("kw-body");
+  if(kb)kb.innerHTML=kwrows.length?kwrows.map(k=>{
+    const e=k.links>0?pct(k.book,k.links):"0.0";
+    const ec=+e>=20?"var(--grn2)":+e>=10?"var(--gold)":"var(--red2)";
+    return`<tr><td style="font-weight:700;color:var(--gold)">${k.kw}</td><td>${k.blocks||"—"}</td><td>${k.links||"—"}</td><td>${k.book||0}</td><td style="color:${ec};font-weight:700">${e}%</td></tr>`;
+  }).join(""):
+  `<tr><td colspan="5" style="color:var(--grey);text-align:center;padding:18px">No keyword data today — check back after daily submissions</td></tr>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// LEAK DETECTOR
+// ═══════════════════════════════════════════════════════════
+function renderLeaks(){
+  const ld7=last7(DATA.liz), dd7=last7(DATA.dominique), jp7=last7(DATA.jp,"date");
+  const shows7=agg(ld7,"shows")+agg(dd7,"shows")+agg(dd7,"taken");
+  const booked7=agg(ld7,"booked")+agg(dd7,"booked");
+  const inbound7=agg(ld7,"inbound")+agg(dd7,"inbound");
+  const qual7=agg(ld7,"qualified")+agg(dd7,"qualified");
+  const ns7=agg(ld7,"noshows")+agg(ld7,"noShows")+agg(dd7,"noshows")+agg(dd7,"noShows");
+  const jp_of7=jp7.filter(d=>d.offered==="Yes").length;
+  const jp_cl7=jp7.filter(d=>String(d.closed||"").startsWith("Yes")).length;
+  const jp_co7=agg(jp7,"contracted"), jp_cd7=agg(jp7,"collected");
+
+  const showR=booked7>0?shows7/booked7:0;
+  const qualR=inbound7>0?qual7/inbound7:0;
+  const closeR=jp_of7>0?jp_cl7/jp_of7:0;
+  const collectR=jp_co7>0?jp_cd7/jp_co7:0;
+  const nsR=booked7>0?ns7/booked7:0;
+
+  const kwb={},kwl={};
+  [...ld7,...dd7].forEach(d=>{
+    if(d.kw_blocks){const k=String(d.kw_blocks).toUpperCase().trim();kwb[k]=(kwb[k]||0)+1;}
+    if(d.kw_links){const k=String(d.kw_links).toUpperCase().trim();kwl[k]=(kwl[k]||0)+1;}
+  });
+  const deadKw=Object.keys(kwb).filter(k=>(kwl[k]||0)/(kwb[k]||1)<THR.deadKwRatio);
+
+  const ls=(v,t,inv=false)=>{const bad=inv?v>t:v<t;const crit=inv?v>t*1.5:v<t*.6;return crit?"fire":bad?"warn":"ok";};
+  const l_ns7=agg(ld7,"noshows")||agg(ld7,"noShows");const d_ns7=agg(dd7,"noshows")||agg(dd7,"noShows");
+  const l_bk7=agg(ld7,"booked");const d_bk7=agg(dd7,"booked");
+  const l_nsr=l_bk7>0?l_ns7/l_bk7:0;const d_nsr=d_bk7>0?d_ns7/d_bk7:0;
+  const worstNS=l_nsr>d_nsr?`Liz (${(l_nsr*100).toFixed(0)}% NS rate)`:`Dom (${(d_nsr*100).toFixed(0)}% NS rate)`;
+
+  const leaks=[
+    {icon:"👁",name:"Show Rate",desc:"Booked prospects not showing up. Below 70% = setter follow-up or lead quality problem.",
+     val:showR,thr:THR.showRate,fmt:"pct",inv:false,s:ls(showR,THR.showRate),
+     note:s=>s==="ok"?`${(showR*100).toFixed(1)}% — solid. Setters running clean follow-up.`:s==="warn"?`${(showR*100).toFixed(1)}% — below 70%. Tighten setter follow-up before each call.`:`CRITICAL: ${(showR*100).toFixed(1)}% show rate. Booking pipeline is leaking. Fix immediately.`},
+    {icon:"🎯",name:"Qual Rate",desc:"% of inbound DMs becoming qualified prospects. Low = wrong audience or keywords pulling tire-kickers.",
+     val:qualR,thr:THR.qualRate,fmt:"pct",inv:false,s:ls(qualR,THR.qualRate),
+     note:s=>s==="ok"?`${(qualR*100).toFixed(1)}% — right people in the DMs.`:s==="warn"?`${(qualR*100).toFixed(1)}% — below 18%. Check keyword rotation and ad targeting.`:`CRITICAL: Only ${(qualR*100).toFixed(1)}% of DMs qualifying. Ad targeting or keyword review needed now.`},
+    {icon:"🔑",name:"Dead Keywords",desc:"Keywords generating blocks but not converting to booking links. Wasted setter effort — rotate or cut.",
+     val:deadKw.length,thr:1,fmt:"count",inv:true,s:deadKw.length===0?"ok":deadKw.length<=2?"warn":"fire",
+     note:s=>s==="ok"?"All active keywords converting to booking links. Rotation on track.":deadKw.length===0?"Keywords clean.":
+       `${deadKw.length} keyword(s) pulling blocks with no booking links: ${deadKw.join(", ")}. Rotate or cut these now.`},
+    {icon:"🤝",name:"Close Rate",desc:"Offers made vs closes. Below 50% = objection handling, pricing, or demo framework breakdown.",
+     val:closeR,thr:THR.closeRate,fmt:"pct",inv:false,s:ls(closeR,THR.closeRate),
+     note:s=>s==="ok"?`${(closeR*100).toFixed(1)}% — strong. Offer landing clean.`:s==="warn"?`${(closeR*100).toFixed(1)}% — below 50%. Review objection handling in the close.`:`CRITICAL: ${(closeR*100).toFixed(1)}% close rate. Demo framework needs audit now.`},
+    {icon:"💰",name:"Payment Gap",desc:"Contracted vs collected. Below 80% = split pay clients not paying or collection follow-up missing.",
+     val:collectR,thr:THR.collectRate,fmt:"pct",inv:false,s:ls(collectR,THR.collectRate),
+     note:s=>s==="ok"?`${(collectR*100).toFixed(1)}% collect rate — payments tracking.`:s==="warn"?`${money(jp_co7-jp_cd7)} uncollected. Chase split pay clients now.`:`CRITICAL: ${money(jp_co7-jp_cd7)} gap between contracted and collected. Escalate immediately.`},
+    {icon:"⚠️",name:"No-Show Source",desc:"Which setter's leads are ghosting? Identifies the specific rep driving the no-show problem.",
+     val:nsR,thr:THR.noShowRate,fmt:"pct",inv:true,s:ls(nsR,THR.noShowRate,true),
+     note:s=>s==="ok"?`No-show rate ${(nsR*100).toFixed(1)}% — both setters tracking fine.`:
+       `${worstNS} generating highest no-shows. Review lead quality and pre-call follow-up for that rep.`},
+  ];
+
+  const lc=$("leak-cards");
+  if(!lc)return;
+  lc.innerHTML=leaks.map(l=>{
+    const s=l.s, col=s==="ok"?"var(--grn)":s==="warn"?"var(--gold)":"var(--red2)";
+    const fp=l.fmt==="count"?Math.min(100,(l.val/3)*100):Math.min(100,(l.val/l.thr)*(l.inv?50:100));
+    const fv=l.fmt==="count"?l.val:`${(l.val*100).toFixed(1)}%`;
+    const thrLbl=l.fmt==="count"?"0 dead":l.inv?"< "+Math.round(l.thr*100)+"%":"> "+Math.round(l.thr*100)+"%";
+    return`<div class="lcard">
+      <div class="lstripe" style="background:${col}"></div>
+      <div class="lled ${s}"></div>
+      <div class="lic">${l.icon}</div>
+      <div class="lname">${l.name}</div>
+      <div class="ldesc">${l.desc}</div>
+      <div class="lmeter"><div class="lfill" style="width:${fp}%;background:${col}"></div></div>
+      <div class="lreading"><div class="lval" style="color:${col}">${fv}</div><div class="lthr">threshold: ${thrLbl}</div></div>
+      <div class="lnote ${s}">${l.note(s)}</div>
+    </div>`;
+  }).join("");
+
+  // Update leak tab indicator
+  const hasIssue=leaks.some(l=>l.s!=="ok"), hasFire=leaks.some(l=>l.s==="fire");
+  const ltab=document.querySelector('[data-tab="leaks"]');
+  if(ltab){
+    ltab.textContent=hasFire?"🔴 Leak Detector":hasIssue?"⚠ Leak Detector":"✓ Leak Detector";
+    ltab.className="ntab"+(hasFire?" fire":hasIssue?" warn-tab":"")+(ltab.classList.contains("active")?" active":"");
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// OVERVIEW
+// ═══════════════════════════════════════════════════════════
+function renderOverview(){
+  const T=totals(DATA.monthly), mo=DATA.monthly.map(d=>d.month||d.monthLabel||d.label||"");
+  set("kpi-bk",T.booked||0); set("kpi-tk",T.taken||0); set("kpi-of",T.offers||0); set("kpi-cl",T.closes||0);
+  set("kpi-ns",T.noShows||0); set("kpi-fu",T.followUps||0); set("kpi-dep",T.deposits||0); set("kpi-can",T.cancelled||0);
+  set("kpi-sa",money(T.sales)); set("kpi-rv",money(T.revenue)); ["kpi-sa","kpi-rv","h-sa","h-rv"].forEach(id=>{const e=$(id);if(e){e.style.color="var(--money)";e.style.textShadow="0 0 18px rgba(0,232,122,.3)"}});
+  set("kpi-co",pct(T.revenue,T.sales)+"%");
+  set("kpi-sr",pct(T.taken,T.booked)+"%"); set("kpi-or",pct(T.offers,T.taken)+"%"); set("kpi-cr",pct(T.closes,T.offers)+"%");
+  // Colorize rate stats
+  ["kpi-sr","kpi-or","kpi-cr","kpi-co"].forEach(id=>{const e=$(id);if(e){const v=parseFloat(e.textContent);if(!isNaN(v)&&v>=50){e.style.color="var(--stat-grn)";e.style.textShadow="0 0 12px rgba(0,255,136,.25)";}}});
+  set("h-sa",money(T.sales)); set("h-rv",money(T.revenue));
+  // Computed
+  const totalSpend=agg(DATA.frank,"adSpend");
+  const avgDeal=T.closes?Math.round(T.sales/T.closes):0;
+  const cpa=T.closes&&totalSpend?Math.round(totalSpend/T.closes):0;
+  const roas=totalSpend?(T.sales/totalSpend).toFixed(2):"—";
+  const nsr=pct(T.noShows,T.booked)+"%";
+  set("kpi-roas",roas+(roas!=="—"?"x":"")); set("kpi-cpa",cpa?money(cpa):"—");
+  set("kpi-avg",avgDeal?money(avgDeal):"—"); set("kpi-nsr",nsr); set("kpi-spend",money(Math.round(totalSpend)));
+  const roasEl=$("kpi-roas");
+  if(roasEl&&roas!=="—"){const rv=parseFloat(roas);roasEl.style.color=rv>=8?"var(--grn2)":rv>=4?"var(--gold)":"var(--red2)";}
+  area("ch-rev",mo,[{label:"Contracted",data:DATA.monthly.map(d=>+d.sales||0),color:"#00FF88"},{label:"Collected",data:DATA.monthly.map(d=>+d.revenue||0),color:"#00E5CC"}]);
+  mini("ch-bk",mo,DATA.monthly.map(d=>+d.booked||0),CC.cyan); mini("ch-tk",mo,DATA.monthly.map(d=>+d.taken||0),CC.violet);
+  mini("ch-of",mo,DATA.monthly.map(d=>+d.offers||0),CC.orange); mini("ch-cl",mo,DATA.monthly.map(d=>+d.closes||0),CC.lime);
+  mini("ch-ns",mo,DATA.monthly.map(d=>+d.noShows||0),CC.red2); mini("ch-ca",mo,DATA.monthly.map(d=>+d.cancelled||0),CC.pink);
+  mini("ch-fu",mo,DATA.monthly.map(d=>+d.followUps||0),CC.teal); mini("ch-dp",mo,DATA.monthly.map(d=>+d.deposits||0),CC.gold2);
+}
+
+// PIPELINE
+function renderPipeline(){
+  const T=totals(DATA.monthly);
+  set("r-sr",pct(T.taken,T.booked)+"%"); set("r-or",pct(T.offers,T.taken)+"%"); set("r-cr",pct(T.closes,T.offers)+"%");
+  [{id:"f-bk",v:T.booked,c:CC.navy},{id:"f-tk",v:T.taken,c:CC.b2},{id:"f-of",v:T.offers,c:CC.b3},{id:"f-cl",v:T.closes,c:CC.gold}].forEach(s=>{
+    const e=$(s.id); if(e){e.style.width=pct(s.v,T.booked)+"%"; e.style.background=s.c;}
+    set(s.id.replace("f-","fp-"),(s.v||0)+" ("+pct(s.v,T.booked)+"%)");
+  });
+  // YTD stat cards
+  set("pl-ytd-bk",T.booked); set("pl-ytd-sh",T.taken); set("pl-ytd-of",T.offers);
+  set("pl-ytd-cl",T.closes); set("pl-ytd-co",money(T.sales)); set("pl-ytd-cd",money(T.revenue));
+  // MTD from rep logs
+  const mj=thisMonth(DATA.jp,"date"), ml=thisMonth(DATA.liz,"date"), md=thisMonth(DATA.dominique,"date");
+  const mtd_bk=agg(ml,"booked")+agg(md,"booked");
+  const mtd_sh=agg(ml,"shows")+agg(md,"shows");
+  const mtd_of=mj.filter(d=>d.offered==="Yes").length+agg(md,"offers");
+  const mtd_cl=mj.filter(d=>String(d.closed||"").startsWith("Yes")).length+agg(md,"closes");
+  const mtd_co=agg(mj,"contracted")+agg(md,"contracted");
+  const mtd_cd=agg(mj,"collected")+agg(md,"collected")+agg(ml,"collected");
+  set("pl-mtd-bk",mtd_bk); set("pl-mtd-sh",mtd_sh); set("pl-mtd-of",mtd_of);
+  set("pl-mtd-cl",mtd_cl); set("pl-mtd-co",money(mtd_co)); set("pl-mtd-cd",money(mtd_cd));
+  set("pl-mtd-cr",pct(mtd_cl,mtd_sh)+"%");
+}
+
+// REVENUE
+function renderRevenue(){
+  const T=totals(DATA.monthly), mo=DATA.monthly.map(d=>d.month||d.monthLabel||d.label||"");
+  set("rv-co",money(T.sales)); set("rv-cd",money(T.revenue)); set("rv-cr",pct(T.revenue,T.sales)+"%");
+  ["rv-co","rv-cd","rv-mtd-co","rv-mtd-cd"].forEach(id=>{const e=$(id);if(e){e.style.color="var(--money)";e.style.textShadow="0 0 18px rgba(0,232,122,.3)";}});
+  bars("ch-rvb",mo,[{label:"Contracted",data:DATA.monthly.map(d=>+(d.sales||d.contracted||d.contractedRevenue||0)),backgroundColor:"#00FF88cc"},{label:"Collected",data:DATA.monthly.map(d=>+(d.revenue||d.collected||d.cashCollected||d.newCash||0)),backgroundColor:"#00E5CCcc"}]);
+  // ROAS from Frank spend
+  const totalSpend=agg(DATA.frank,"adSpend");
+  const roasVal=totalSpend?(T.sales/totalSpend).toFixed(2):"—";
+  set("rv-spend",money(Math.round(totalSpend))); set("rv-roas",roasVal+(roasVal!=="—"?"x":""));
+  const roasEl=$("rv-roas");
+  if(roasEl&&roasVal!=="—"){const rv=parseFloat(roasVal);roasEl.style.color=rv>=8?"var(--grn2)":rv>=4?"var(--gold)":"var(--red2)";}
+  // MTD from rep logs
+  const mj=thisMonth(DATA.jp,"date"), ml=thisMonth(DATA.liz,"date"), md=thisMonth(DATA.dominique,"date");
+  const mtd_co=agg(mj,"contracted")+agg(md,"contracted");
+  const mtd_cd=agg(mj,"collected")+agg(md,"collected")+agg(ml,"collected");
+  const mtd_cl=mj.filter(d=>String(d.closed||"").startsWith("Yes")).length+agg(md,"closes");
+  set("rv-mtd-co",money(mtd_co)); set("rv-mtd-cd",money(mtd_cd));
+  set("rv-mtd-cl",mtd_cl); set("rv-mtd-cr",pct(mtd_cd,mtd_co)+"%");
+}
+
+// JP
+function renderJP(){
+  const jd=DATA.jp||[];
+  const total=jd.length;
+  const showed=jd.filter(d=>d.showed==="Yes").length, noShow=jd.filter(d=>d.showed==="No").length;
+  const offered=jd.filter(d=>d.offered==="Yes").length;
+  const closed=jd.filter(d=>String(d.closed||"").startsWith("Yes")).length;
+  const pif=jd.filter(d=>d.closed==="Yes - PIF").length;
+  const split=jd.filter(d=>d.closed==="Yes - Split").length;
+  const noClose=jd.filter(d=>d.closed==="No").length;
+  const co=agg(jd,"contracted"), cd=agg(jd,"collected");
+  const commission=jd.reduce((a,d)=>a+(String(d.closed||"").startsWith("Yes")?(+d.contracted||0)*0.1:0),0);
+  // Render target inputs
+  const jpTr=$("jp-tgt-rows");
+  if(jpTr)jpTr.innerHTML=[
+    tgtRow('jp','shows','Shows (Monthly)',''),
+    tgtRow('jp','closes','Closes (Monthly)',''),
+    tgtRow('jp','contracted','Contracted ($)','$'),
+    tgtRow('jp','collected','Collected ($)','$'),
+  ].join('');
+  set("jp-total",total); set("jp-sh",showed); set("jp-of",offered); set("jp-cl",closed);
+  set("jp-pif",pif); set("jp-split",split); set("jp-nc",noClose); set("jp-ns2",noShow);
+  set("jp-or",pct(offered,showed)+"%"); set("jp-cr",pct(closed,offered)+"%"); set("jp-sr",pct(showed,total)+"%");
+  set("jp-co",money(co)); set("jp-cd",money(cd)); set("jp-cr2",pct(cd,co)+"%");
+  set("jp-ad",closed?money(Math.round(co/closed)):"—"); set("jp-com",money(Math.round(commission)));
+  // Close rate ring label
+  set("jp-cr-val",pct(closed,offered)+"%");
+  // Donuts
+  donut("ch-jp-cr",[closed,Math.max(0,offered-closed)],[CC.gold,CC.navy+"44"],["Closed","Not Closed"]);
+  donut("ch-jp-calls",[showed,Math.max(0,noShow)],[CC.b2,CC.red2+"66"],["Showed","No Show"]);
+  if(pif+split+noClose>0) donut("ch-jp-out",[pif,split,noClose],[CC.gold,CC.b2,CC.red2],["PIF","Split","No Close"]);
+  // Trends
+  const dates=jd.map(d=>String(d.date||"").slice(5));
+  mini("ch-jp-sh",dates,jd.map(d=>d.showed==="Yes"?1:0),CC.cyan);
+  mini("ch-jp-cl",dates,jd.map(d=>String(d.closed||"").startsWith("Yes")?1:0),CC.yellow);
+  mini("ch-jp-co",dates,jd.map(d=>+d.contracted||0),CC.teal);
+  mini("ch-jp-cd",dates,jd.map(d=>+d.collected||0),CC.green);
+  let tbl="";
+  [...jd].reverse().forEach(d=>{
+    const cl=String(d.closed||""); const cc=cl.startsWith("Yes")?"color:var(--gold);font-weight:700":cl==="No"?"color:var(--red2)":"color:var(--grey)";
+    tbl+=`<tr><td>${d.date||""}</td><td style="font-weight:600">${d.prospect||""}</td><td style="color:var(--b3)">${d.setter||""}</td>
+      <td style="color:${d.showed==="Yes"?"var(--b2)":"var(--red2)"}">${d.showed||""}</td><td>${d.offered||""}</td>
+      <td style="${cc}">${d.closed||""}</td><td style="color:var(--money);font-weight:700">${money(d.contracted||0)}</td>
+      <td style="color:var(--money);text-shadow:0 0 12px rgba(0,232,122,.4);font-weight:700">${money(d.collected||0)}</td><td style="color:var(--grey);font-size:8.5px">${d.notes||""}</td></tr>`;
+  });
+  const jt=$("jp-tbl"); if(jt)jt.innerHTML=tbl||`<tr><td colspan="9" style="color:var(--grey);text-align:center;padding:18px">No entries yet</td></tr>`;
+}
+
+// LIZ
+function renderLiz(){
+  const ld=DATA.liz||[];
+  // Render Liz target inputs
+  const lzTr=$("liz-tgt-rows");
+  if(lzTr)lzTr.innerHTML=[
+    tgtRow('liz','booked','Calls Booked (Monthly)',''),
+    tgtRow('liz','shows','Shows (Monthly)',''),
+    tgtRow('liz','inbound','Inbound DMs (Monthly)',''),
+    tgtRow('liz','qualified','Qualified (Monthly)',''),
+  ].join('');
+  set("lz-bk",agg(ld,"booked")); set("lz-in",agg(ld,"inbound")); set("lz-cv",agg(ld,"convos"));
+  set("lz-ql",agg(ld,"qualified")); set("lz-lk",agg(ld,"links_sent"));
+  set("lz-sh",agg(ld,"shows")); set("lz-ns",agg(ld,"noshows")||agg(ld,"noShows"));
+  set("lz-ob",agg(ld,"outbound_dms")); set("lz-mn",agg(ld,"minors"));
+  set("lz-fu",agg(ld,"followups")||agg(ld,"followUps"));
+  set("lz-dq",agg(ld,"disqualified"));
+  set("lz-sr",pct(agg(ld,"shows"),agg(ld,"booked"))+"%");
+  set("lz-qr",pct(agg(ld,"qualified"),agg(ld,"inbound"))+"%");
+  set("lz-br",pct(agg(ld,"booked"),agg(ld,"links_sent"))+"%");
+  // Personal production — rep card only, not in org totals
+  const lz_cl=agg(ld,"closes"), lz_co=agg(ld,"contracted"), lz_cd=agg(ld,"collected");
+  set("lz-cl",lz_cl); set("lz-co",money(lz_co)); set("lz-cd",money(lz_cd));
+  set("lz-cr",pct(lz_cl,agg(ld,"offers")||lz_cl||1)+"%");
+  set("lz-ccr",pct(lz_cd,lz_co)+"%");
+  const dates=ld.map(d=>String(d.date||"").slice(5));
+  mini("ch-lz-in",dates,ld.map(d=>+d.inbound||0),CC.cyan);
+  mini("ch-lz-ql",dates,ld.map(d=>+d.qualified||0),CC.green);
+  mini("ch-lz-bk",dates,ld.map(d=>+d.booked||0),CC.yellow);
+  mini("ch-lz-sh",dates,ld.map(d=>+d.shows||0),CC.teal);
+  // Personal production charts
+  mini("ch-lz-pp-co",dates,ld.map(d=>+d.contracted||0),CC.teal);
+  mini("ch-lz-pp-cd",dates,ld.map(d=>+d.collected||0),CC.green);
+  if(lz_co>0) donut("ch-lz-pp-cr",[lz_cd,Math.max(0,lz_co-lz_cd)],[CC.gold,CC.navy+"44"],["Collected","Pending"]);
+  let tbl="";
+  [...ld].reverse().forEach(d=>{
+    tbl+=`<tr><td>${d.date||""}</td><td style="color:var(--b2)">${d.platform||""}</td>
+      <td style="color:var(--gold);font-size:8.5px">${d.keywords||""}</td>
+      <td>${+d.inbound||0}</td><td>${+d.convos||0}</td><td style="color:var(--grn2)">${+d.qualified||0}</td>
+      <td style="color:var(--red2)">${+d.disqualified||0}</td><td style="color:var(--org)">${+d.minors||0}</td>
+      <td style="color:var(--gold)">${+d.booked||0}</td><td>${+d.shows||0}</td>
+      <td style="color:var(--red2)">${+d.noshows||+d.noShows||0}</td>
+      <td style="color:var(--gold);font-weight:600">${+d.closes||0}</td>
+      <td style="color:var(--money);font-weight:700">${money(+d.contracted||0)}</td>
+      <td style="color:var(--money);text-shadow:0 0 10px rgba(0,232,122,.3);font-weight:700">${money(+d.collected||0)}</td>
+      <td style="color:var(--grey);font-size:8px">${d.disqual_reason||""}</td></tr>`;
+  });
+  const lt=$("lz-tbl"); if(lt)lt.innerHTML=tbl||`<tr><td colspan="15" style="color:var(--grey);text-align:center;padding:18px">No entries yet</td></tr>`;
+}
+
+// DOMINIQUE
+function renderDom(){
+  const dd=DATA.dominique||[];
+  const dm_in=agg(dd,"inbound"), dm_ql=agg(dd,"qualified"), dm_bk=agg(dd,"booked");
+  const dm_sh=agg(dd,"shows")||agg(dd,"taken"), dm_ns=agg(dd,"noshows")||agg(dd,"noShows");
+  const dm_of=agg(dd,"offers"), dm_cl=agg(dd,"closes"), dm_mn=agg(dd,"minors");
+  const dm_co=agg(dd,"contracted")||agg(dd,"revenue");
+  const dm_cd=agg(dd,"collected")||agg(dd,"newcash");
+  const dm_ob=agg(dd,"outbound_dms"), dm_fu=agg(dd,"followups")||agg(dd,"followUps"), dm_cv=agg(dd,"convos");
+  // Render Dom target inputs
+  const dmTr=$("dom-tgt-rows");
+  if(dmTr)dmTr.innerHTML=[
+    tgtRow('dom','booked','Calls Booked (Monthly)',''),
+    tgtRow('dom','shows','Shows (Monthly)',''),
+    tgtRow('dom','closes','Closes (Monthly)',''),
+    tgtRow('dom','contracted','Contracted ($)','$'),
+    tgtRow('dom','collected','Collected ($)','$'),
+  ].join('');
+  set("dm-bk",dm_bk); set("dm-in",dm_in); set("dm-ql",dm_ql); set("dm-cv",dm_cv);
+  set("dm-sh",dm_sh); set("dm-ns",dm_ns); set("dm-of",dm_of); set("dm-cl",dm_cl);
+  set("dm-mn",dm_mn); set("dm-ob",dm_ob); set("dm-fu",dm_fu);
+  set("dm-co",money(dm_co)); set("dm-cd",money(dm_cd));
+  set("dm-sr",pct(dm_sh,dm_bk)+"%"); set("dm-cr",pct(dm_cl,dm_of)+"%");
+  set("dm-qr",pct(dm_ql,dm_in)+"%"); set("dm-br",pct(dm_bk,dm_co||dm_bk||1)+"%");
+  set("dm-ccr",pct(dm_cd,dm_co)+"%");
+  set("dm-cr-val",pct(dm_cl,dm_of)+"%");
+  // Donuts
+  if(dm_of>0) donut("ch-dm-cr",[dm_cl,Math.max(0,dm_of-dm_cl)],[CC.gold,CC.navy+"44"],["Closed","Not Closed"]);
+  const funnelTotal=Math.max(dm_in,1);
+  if(dm_in>0) donut("ch-dm-funnel",
+    [Math.max(0,dm_in-dm_cv-dm_ql),dm_cv-dm_ql>0?dm_cv-dm_ql:0,Math.max(0,dm_ql-dm_bk),dm_bk],
+    [CC.b2+"44",CC.b2,CC.b3,CC.gold],["Inbound Only","Convos","Qualified","Booked"]);
+  const dates=dd.map(d=>String(d.date||"").slice(5));
+  mini("ch-dm-in",dates,dd.map(d=>+d.inbound||0),CC.cyan);
+  mini("ch-dm-ql",dates,dd.map(d=>+d.qualified||0),CC.green);
+  mini("ch-dm-bk",dates,dd.map(d=>+d.booked||0),CC.purple);
+  mini("ch-dm-sh",dates,dd.map(d=>+d.shows||+d.taken||0),CC.teal);
+  mini("ch-dm-cl",dates,dd.map(d=>+d.closes||0),CC.yellow);
+  mini("ch-dm-co",dates,dd.map(d=>+d.contracted||+d.revenue||0),CC.teal);
+  mini("ch-dm-cd",dates,dd.map(d=>+d.collected||+d.newcash||0),CC.green);
+  let tbl="";
+  [...dd].reverse().forEach(d=>{
+    tbl+=`<tr><td>${d.date||""}</td><td style="color:var(--b2)">${d.platform||""}</td>
+      <td style="color:var(--gold);font-size:8.5px">${d.keywords||""}</td>
+      <td>${+d.inbound||0}</td><td style="color:var(--grn2)">${+d.qualified||0}</td>
+      <td style="color:var(--org)">${+d.minors||0}</td><td style="color:var(--gold)">${+d.booked||0}</td>
+      <td>${+d.shows||+d.taken||0}</td><td style="color:var(--gold);font-weight:600">${+d.closes||0}</td>
+      <td style="color:var(--money);font-weight:700">${money(+d.contracted||+d.revenue||0)}</td>
+      <td style="color:var(--money);text-shadow:0 0 10px rgba(0,232,122,.3);font-weight:700">${money(+d.collected||+d.newcash||0)}</td>
+      <td style="color:var(--grey);font-size:8px">${d.fix||""}</td></tr>`;
+  });
+  const dt=$("dm-tbl"); if(dt)dt.innerHTML=tbl||`<tr><td colspan="12" style="color:var(--grey);text-align:center;padding:18px">No entries yet</td></tr>`;
+}
+
+// ─── ENTRY HANDLERS ──────────────────────────────────────
+function showConf(id){const e=$(id);if(e){e.classList.add("show");setTimeout(()=>e.classList.remove("show"),3500);}}
+function saveJP(){
+  const e={date:val("jp-dt"),prospect:val("jp-pr"),setter:val("jp-st"),showed:val("jp-sh"),offered:val("jp-of"),closed:val("jp-cl"),contracted:+val("jp-co"),collected:+val("jp-cd"),notes:val("jp-nt")};
+  saveL(LS.jp,e); DATA.jp.push(e); renderJP(); showConf("jp-conf");
+}
+function saveLiz(){
+  const e={date:val("lz-dt"),platform:val("lz-pl"),keywords:val("lz-kw"),kw_blocks:val("lz-kb"),kw_links:val("lz-kl"),inbound:+val("lz-in"),convos:+val("lz-cv"),qualified:+val("lz-ql"),disqualified:+val("lz-dq"),minors:+val("lz-mn"),disqual_reason:val("lz-dr"),links_sent:+val("lz-lk"),booked:+val("lz-bk"),avg_first:+val("lz-af"),avg_convo:+val("lz-ac"),followups:+val("lz-fu"),outbound_dms:+val("lz-ob"),outbound_fu:+val("lz-of2"),no_book_reason:val("lz-nr"),fix:val("lz-fx"),shows:+val("lz-sh"),noshows:+val("lz-ns"),closes:+val("lz-cl-in"),contracted:+val("lz-co-in"),collected:+val("lz-cd-in")};
+  saveL(LS.liz,e); DATA.liz.push(e); renderLiz(); renderPulse(); renderLeaks(); showConf("lz-conf");
+}
+function saveDom(){
+  const e={date:val("dm-dt"),platform:val("dm-pl"),keywords:val("dm-kw"),kw_blocks:val("dm-kb"),kw_links:val("dm-kl"),inbound:+val("dm-in"),convos:+val("dm-cv"),qualified:+val("dm-ql"),disqualified:+val("dm-dq"),minors:+val("dm-mn"),disqual_reason:val("dm-dr"),links_sent:+val("dm-lk"),booked:+val("dm-bk"),avg_first:+val("dm-af"),avg_convo:+val("dm-ac"),followups:+val("dm-fu"),outbound_dms:+val("dm-ob"),outbound_fu:+val("dm-of2"),no_book_reason:val("dm-nr"),fix:val("dm-fx"),shows:+val("dm-sh"),noshows:+val("dm-ns"),offers:+val("dm-of3"),closes:+val("dm-cl"),contracted:+val("dm-co-in"),collected:+val("dm-cd-in")};
+  saveL(LS.dom,e); DATA.dominique.push(e); renderDom(); renderPulse(); renderLeaks(); showConf("dm-conf");
+}
+
+function saveFrank(){
+  const cpm_val = +val("fk-mg") > 0 ? (+val("fk-sp") / +val("fk-mg")) : 0;
+  const e={
+    date:val("fk-dt"),
+    adSpend:+val("fk-sp"),
+    messages:+val("fk-mg"),
+    cpm:parseFloat(cpm_val.toFixed(2)),
+    reach:+val("fk-rc"),
+    notes:val("fk-nt")
+  };
+  saveL("ddba_frank", e);
+  DATA.frank.push(e);
+  renderMarketing();
+  showConf("fk-conf");
+}
+
+// ─── TABS ────────────────────────────────────────────────
+function tab(name){
+  document.querySelectorAll(".ntab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="p-"+name));
+}
+
+// ─── MARKETING PULSE ─────────────────────────────────────
+function renderMarketing(){
+  const allFk = DATA.frank || [];
+  // Filter Frank ad data by selected period
+  let fk;
+  if(MK_PERIOD==="daily")        fk = todayRows(allFk);
+  else if(MK_PERIOD==="weekly")  fk = thisWeek(allFk);
+  else if(MK_PERIOD==="monthly") fk = thisMonth(allFk);
+  else                           fk = allFk; // overall/YTD
+
+  // Booking + revenue now pulled from rep logs (not Frank's form)
+  const allJP  = DATA.jp || [], allLiz = DATA.liz || [], allDom = DATA.dominique || [];
+  let jd, ld, dd;
+  if(MK_PERIOD==="daily")        { jd=todayRows(allJP,"date"); ld=todayRows(allLiz); dd=todayRows(allDom); }
+  else if(MK_PERIOD==="weekly")  { jd=thisWeek(allJP,"date");  ld=thisWeek(allLiz);  dd=thisWeek(allDom); }
+  else if(MK_PERIOD==="monthly") { jd=thisMonth(allJP,"date"); ld=thisMonth(allLiz); dd=thisMonth(allDom); }
+  else                           { jd=allJP; ld=allLiz; dd=allDom; }
+
+  const totalAdSpend   = fk.reduce((a,d)=>a+(+d.adSpend||0),0);
+  const totalMessages  = fk.reduce((a,d)=>a+(+d.messages||0),0);
+  // Booking from setter + closer logs
+  const totalBooked    = agg(ld,"booked")+agg(dd,"booked");
+  const totalDemos     = agg(ld,"shows")+agg(dd,"shows")+jd.filter(d=>d.showed==="Yes").length;
+  const totalOffers    = jd.filter(d=>d.offered==="Yes").length+agg(dd,"offers");
+  const totalCloses    = jd.filter(d=>String(d.closed||"").startsWith("Yes")).length+agg(dd,"closes");
+  const totalNoShows   = agg(ld,"noshows")+agg(ld,"noShows")+agg(dd,"noshows")+agg(dd,"noShows");
+  const totalCancelled = fk.reduce((a,d)=>a+(+d.cancelled||0),0); // still from Frank log if present
+  const totalRevenue   = agg(jd,"contracted")+agg(dd,"contracted");
+  const totalCash      = agg(jd,"collected")+agg(dd,"collected")+agg(ld,"collected");
+  const totalDeposits  = 0; // not tracked per period yet
+  const totalRecurring = 0;
+
+  const cpmRows        = fk.filter(d=>d.messages>0);
+  const avgCPM         = cpmRows.length ? cpmRows.reduce((a,d)=>a+(+d.adSpend/+d.messages),0)/cpmRows.length : 0;
+  const totalCPA       = totalCloses > 0 ? totalAdSpend / totalCloses : 0;
+
+  const closeRate   = totalDemos  > 0 ? (totalCloses/totalDemos*100).toFixed(2)  : "0.00";
+  const noShowRate  = totalBooked > 0 ? (totalNoShows/totalBooked*100).toFixed(2) : "0.00";
+  const costPerClose= totalCloses > 0 ? (totalAdSpend/totalCloses).toFixed(0)     : "0";
+  const lead2call   = totalMessages > 0 ? (totalBooked/totalMessages*100).toFixed(2)  : "0.00";
+  const msg2close   = totalMessages > 0 ? (totalCloses/totalMessages*100).toFixed(2)  : "0.00";
+  const cancelRate  = totalBooked > 0 ? (totalCancelled/totalBooked*100).toFixed(2)  : "0.00";
+  const cashPerDemo = totalDemos > 0 ? (totalCash/totalDemos).toFixed(0) : "0";
+  const costPerCall = totalBooked > 0 ? (totalAdSpend/totalBooked).toFixed(0) : "0";
+  const costPerDemo = totalDemos > 0 ? (totalAdSpend/totalDemos).toFixed(0) : "0";
+  const roas        = totalAdSpend > 0 ? (totalRevenue/totalAdSpend).toFixed(2) : "0.00";
+
+  set("mk-demos",   totalDemos);
+  set("mk-closes",  totalCloses);
+  set("mk-cr",      closeRate+"%");
+  set("mk-cpp",     "$"+Number(costPerClose).toLocaleString());
+  set("mk-l2c",     lead2call+"%");
+  set("mk-m2c",     msg2close+"%");
+  set("mk-canc",    cancelRate+"%");
+  set("mk-cpd",     "$"+Number(cashPerDemo).toLocaleString());
+  set("mk-cpc",     "$"+Number(costPerCall).toLocaleString());
+  set("mk-cpss",    "$"+Number(costPerDemo).toLocaleString());
+  set("mk-nsr",     noShowRate+"%");
+  set("mk-spend",   "$"+totalAdSpend.toLocaleString(undefined,{maximumFractionDigits:0}));
+  set("mk-rev",     "$"+totalRevenue.toLocaleString());
+  set("mk-cash",    "$"+totalCash.toLocaleString());
+  set("mk-rec",     "$"+totalRecurring.toLocaleString());
+  set("mk-roas",    roas+"x");
+  set("mk-msgs",    totalMessages);
+  set("mk-cpm",     "$"+avgCPM.toFixed(2));
+  set("mk-cpa",     totalCPA>0?"$"+totalCPA.toLocaleString(undefined,{maximumFractionDigits:0}):"—");
+  set("mk-dep",     totalDeposits>0?totalDeposits:"—");
+  // Money values → green
+  ["mk-rev","mk-cash","mk-rec"].forEach(id=>{const e=$(id);if(e){e.style.color="var(--money)";e.style.textShadow="0 0 16px rgba(0,232,122,.3)";}});
+  // Good rate stats → stat-grn if favorable
+  const goodRateEls=[{id:"mk-cr",good:50},{id:"mk-l2c",good:5},{id:"mk-m2c",good:1}];
+  goodRateEls.forEach(({id,good})=>{const e=$(id);if(e){const v=parseFloat(e.textContent);if(!isNaN(v)&&v>=good){e.style.color="var(--stat-grn)";e.style.textShadow="0 0 10px rgba(0,255,136,.2)";}}});
+
+  const roasEl = $("mk-roas");
+  if(roasEl){
+    const rv = parseFloat(roas);
+    roasEl.style.color = rv >= 8 ? "var(--grn2)" : rv >= 4 ? "var(--gold)" : "var(--red2)";
+  }
+
+  // Trend charts — dynamic by MK_PERIOD
+  let trendData;
+  if(MK_PERIOD==="daily"){
+    // Last 30 days of Frank daily data
+    trendData = [...allFk].slice(-30);
+  } else if(MK_PERIOD==="weekly"){
+    // Aggregate by week — last 12 weeks
+    const weekMap={};
+    allFk.forEach(d=>{
+      const dt=new Date(d.date||""); if(isNaN(dt))return;
+      const dow=dt.getDay(); const mon=new Date(dt); mon.setDate(dt.getDate()-(dow===0?6:dow-1));
+      const wk=mon.toISOString().slice(0,10);
+      if(!weekMap[wk])weekMap[wk]={date:wk,adSpend:0,messages:0,contractedRevenue:0,count:0};
+      weekMap[wk].adSpend+=(+d.adSpend||0); weekMap[wk].messages+=(+d.messages||0);
+      weekMap[wk].contractedRevenue+=(+d.contractedRevenue||+d.adSpend*0||0);
+      weekMap[wk].count++;
+    });
+    trendData=Object.values(weekMap).slice(-12);
+  } else if(MK_PERIOD==="monthly"){
+    // Use DATA.monthly (master data monthly rollup)
+    trendData=(DATA.monthly||[]).filter(d=>+d.adSpend||+d.sales).map(d=>({
+      date:d.month||"",adSpend:+d.adSpend||0,messages:+d.messages||0,
+      contractedRevenue:+d.sales||0
+    }));
+  } else {
+    // All time — all Frank daily entries
+    trendData = [...allFk];
+  }
+  const tDates = trendData.map(d=>String(d.date||"").slice(MK_PERIOD==="monthly"?0:5));
+  mini("ch-mk-spend", tDates, trendData.map(d=>+d.adSpend||0),           CC.cyan);
+  mini("ch-mk-msgs",  tDates, trendData.map(d=>+d.messages||0),          CC.purple);
+  mini("ch-mk-rev",   tDates, trendData.map(d=>+d.contractedRevenue||+d.sales||0), CC.green);
+  mini("ch-mk-roas",  tDates, trendData.map(d=>(+d.adSpend>0?(+d.contractedRevenue||+d.sales||0)/(+d.adSpend):0)), CC.yellow);
+  // Update trend label and unit spans dynamically
+  const periodUnits = {daily:"/ day", weekly:"/ week", monthly:"/ month", overall:"all time"};
+  const periodLong  = {daily:"Last 30 Days", weekly:"Last 12 Weeks", monthly:"By Month", overall:"All Time"};
+  const pu = periodUnits[MK_PERIOD]||"/ period";
+  set("mk-trend-lbl", periodLong[MK_PERIOD]||"");
+  ["mk-tr-unit1","mk-tr-unit2","mk-tr-unit3","mk-tr-unit4"].forEach(id=>set(id,pu));
+}
+
+// ─── REBUILD ALL ─────────────────────────────────────────
+function populateTgtInputs(){
+  const fill=(id,v)=>{const e=$(id);if(e&&v!==undefined)e.placeholder=v;};
+  fill("tgt-jp-shows",REP_TGTS.jp.shows); fill("tgt-jp-closes",REP_TGTS.jp.closes);
+  fill("tgt-jp-contracted",REP_TGTS.jp.contracted); fill("tgt-jp-collected",REP_TGTS.jp.collected);
+  fill("tgt-liz-inbound",REP_TGTS.liz.inbound); fill("tgt-liz-convos",REP_TGTS.liz.convos);
+  fill("tgt-liz-qualified",REP_TGTS.liz.qualified); fill("tgt-liz-booked",REP_TGTS.liz.booked);
+  fill("tgt-liz-shows",REP_TGTS.liz.shows);
+  fill("tgt-dom-booked",REP_TGTS.dom.booked); fill("tgt-dom-shows",REP_TGTS.dom.shows);
+  fill("tgt-dom-closes",REP_TGTS.dom.closes); fill("tgt-dom-contracted",REP_TGTS.dom.contracted);
+  fill("tgt-dom-collected",REP_TGTS.dom.collected);
+}
+function rebuild(){ renderPulse(); renderLeaks(); renderOverview(); renderPipeline(); renderRevenue(); renderJP(); renderLiz(); renderDom(); renderMarketing(); populateTgtInputs(); }
+
+// ─── INIT ────────────────────────────────────────────────
+window.addEventListener("load",()=>{
+  const t=today();
+  document.querySelectorAll('input[type="date"]').forEach(e=>e.value=t);
+  const lj=loadL(LS.jp), ll=loadL(LS.liz), ld=loadL(LS.dom);
+  if(lj.length)DATA.jp=[...DATA.jp,...lj];
+  if(ll.length)DATA.liz=[...DATA.liz,...ll];
+  if(ld.length)DATA.dominique=[...DATA.dominique,...ld];
+  const lf=loadL("ddba_frank"); if(lf.length)DATA.frank=[...DATA.frank,...lf];
+  // All SHEET_URLS configured - live mode active
+  rebuild(); sync();
+  $("slast").textContent="Updated "+new Date().toLocaleTimeString();
+  setInterval(sync,5*60*1000);
+});
+</script>
+
+<!-- ══════════════════ HEADER ══════════════════ -->
+<div id="hdr">
+  <div id="hdr-top">
+    <div id="brand">
+      <div id="bmark">DD</div>
+      <div id="btext">
+        <h1>DDBA 5.2 <em>—</em> REVOPS</h1>
+        <p>2026 Production · JP Campbell, Sales Director</p>
+      </div>
+    </div>
+    <div id="hdr-r">
+      <div class="hs"><p class="hl">YTD Contracted</p><p class="hv wh" id="h-sa">—</p></div>
+      <div id="hdiv"></div>
+      <div class="hs"><p class="hl">YTD Collected</p><p class="hv" id="h-rv">—</p></div>
+      <div id="sync-row">
+        <div id="sdot"></div>
+        <span id="stext">Connecting…</span>
+        <button id="sbtn" onclick="sync()">↻ Sync</button>
+        <span id="slast"></span>
+      </div>
+    </div>
+  </div>
+  <div id="nav">
+    <button class="ntab active" data-tab="pulse"    onclick="tab('pulse')">⚡ Pulse</button>
+    <button class="ntab"        data-tab="marketing" onclick="tab('marketing')">📈 Marketing</button>
+    <button class="ntab"        data-tab="leaks"    onclick="tab('leaks')">🔍 Leak Detector</button>
+    <button class="ntab"        data-tab="overview" onclick="tab('overview')">Overview</button>
+    <button class="ntab"        data-tab="pipeline" onclick="tab('pipeline')">Pipeline</button>
+    <button class="ntab"        data-tab="revenue"  onclick="tab('revenue')">Revenue</button>
+    <button class="ntab"        data-tab="liz"      onclick="tab('liz')">Liz · Sets</button>
+    <button class="ntab"        data-tab="dom"      onclick="tab('dom')">Dominique</button>
+    <button class="ntab"        data-tab="jp"       onclick="tab('jp')">JP · Closes</button>
+    <button class="ntab"        data-tab="entry"    onclick="tab('entry')">+ Log Data</button>
+  </div>
+</div>
+
+<div id="main">
+<div id="cfg"><strong>Demo mode.</strong> Open <code>index.html</code>, find <code>SHEET_URLS</code> at the top, paste your 4 Google Sheet CSV URLs. See <code>SETUP_GUIDE.md</code> for full instructions.</div>
+
+<!-- ══════════ DAILY PULSE ══════════ -->
+<div id="p-pulse" class="panel active">
+  <div id="pulse-bar">
+    <div>
+      <div id="pulse-date" style="font-family:var(--fh);font-weight:800;font-size:20px">Loading…</div>
+      <div style="color:var(--grey);font-size:8px;letter-spacing:.12em;text-transform:uppercase;margin-top:3px">DDBA REVOPS · PRODUCTION PULSE</div>
+    </div>
+    <div id="pulse-pill" class="watch">—</div>
+  </div>
+  <!-- Period toggle -->
+  <div class="ptog pulse-tog" style="margin-bottom:16px">
+    <button data-p="daily"   class="active" onclick="setPulsePeriod('daily')">Daily</button>
+    <button data-p="weekly"  onclick="setPulsePeriod('weekly')">Weekly</button>
+    <button data-p="monthly" onclick="setPulsePeriod('monthly')">Monthly</button>
+  </div>
+
+  <div class="g2 mb18">
+    <div class="card">
+      <p class="eye mb12" style="color:var(--gold)">vs Target</p>
+      <p class="ttl" id="pulse-period-lbl" style="font-size:15px;margin-bottom:16px">Daily Production</p>
+      <div class="tbar"><div class="tbar-top"><span class="tbar-lbl">Inbound DMs</span><div class="tbar-right"><span class="tbar-cur" id="tb-dm-c">0</span><span class="tbar-tgt" id="tgt-dm-lbl">/ 150</span><span class="tbar-pct" id="tb-dm-p">0%</span></div></div><div class="tbar-track"><div class="tbar-fill" id="tb-dm-f" style="width:0%"></div></div></div>
+      <div class="tbar"><div class="tbar-top"><span class="tbar-lbl">New Convos</span><div class="tbar-right"><span class="tbar-cur" id="tb-cv-c">0</span><span class="tbar-tgt" id="tgt-cv-lbl">/ 80</span><span class="tbar-pct" id="tb-cv-p">0%</span></div></div><div class="tbar-track"><div class="tbar-fill" id="tb-cv-f" style="width:0%"></div></div></div>
+      <div class="tbar"><div class="tbar-top"><span class="tbar-lbl">Qualified</span><div class="tbar-right"><span class="tbar-cur" id="tb-ql-c">0</span><span class="tbar-tgt" id="tgt-ql-lbl">/ 20</span><span class="tbar-pct" id="tb-ql-p">0%</span></div></div><div class="tbar-track"><div class="tbar-fill" id="tb-ql-f" style="width:0%"></div></div></div>
+      <div class="tbar"><div class="tbar-top"><span class="tbar-lbl">Sets Booked</span><div class="tbar-right"><span class="tbar-cur" id="tb-bk-c">0</span><span class="tbar-tgt" id="tgt-bk-lbl">/ 5</span><span class="tbar-pct" id="tb-bk-p">0%</span></div></div><div class="tbar-track"><div class="tbar-fill" id="tb-bk-f" style="width:0%"></div></div></div>
+      <div class="tbar"><div class="tbar-top"><span class="tbar-lbl">Shows</span><div class="tbar-right"><span class="tbar-cur" id="tb-sh-c">0</span><span class="tbar-tgt" id="tgt-sh-lbl">/ 4</span><span class="tbar-pct" id="tb-sh-p">0%</span></div></div><div class="tbar-track"><div class="tbar-fill" id="tb-sh-f" style="width:0%"></div></div></div>
+      <div class="tbar"><div class="tbar-top"><span class="tbar-lbl">Closes (JP)</span><div class="tbar-right"><span class="tbar-cur" id="tb-cl-c">0</span><span class="tbar-tgt" id="tgt-cl-lbl">/ 1</span><span class="tbar-pct" id="tb-cl-p">0%</span></div></div><div class="tbar-track"><div class="tbar-fill" id="tb-cl-f" style="width:0%"></div></div></div>
+      <div class="tbar"><div class="tbar-top"><span class="tbar-lbl">Cash Collected</span><div class="tbar-right"><span class="tbar-cur" id="tb-ca-c">$0</span><span class="tbar-tgt" id="tgt-ca-lbl">/ $5,000</span><span class="tbar-pct" id="tb-ca-p">0%</span></div></div><div class="tbar-track"><div class="tbar-fill" id="tb-ca-f" style="width:0%"></div></div></div>
+    </div>
+    <div class="card">
+      <p class="eye mb12" style="color:var(--b2)">Rep Verdict</p>
+      <p class="ttl" style="font-size:15px;margin-bottom:16px">On Track / Watch / Needs Attn</p>
+      <div id="verdicts" style="display:flex;flex-direction:column;gap:9px"></div>
+    </div>
+  </div>
+
+  <div class="cc mb18">
+    <p class="eye" style="color:var(--gold)">Day Funnel</p>
+    <p class="ttl">DMs → Convos → Qualified → Booked → Showed → Closed</p>
+    <div id="dfunnel" class="dfunnel"></div>
+  </div>
+
+  <div class="cc">
+    <p class="eye" style="color:var(--b2)">Keyword Performance — Today</p>
+    <p class="ttl">Blocks · Links Sent · Booked · Conversion %</p>
+    <div style="overflow-x:auto">
+      <table class="kwtbl">
+        <thead><tr><th>Keyword</th><th>Most Blocks</th><th>Links Sent</th><th>Booked</th><th>Link → Book %</th></tr></thead>
+        <tbody id="kw-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ LEAK DETECTOR ══════════ -->
+<div id="p-leaks" class="panel">
+  <div class="mb18">
+    <p style="font-family:var(--fh);font-weight:800;font-size:22px">Leak Detector <span style="color:var(--grey);font-size:14px;font-weight:400">— Last 7 Days</span></p>
+    <p style="color:var(--grey);font-size:8px;letter-spacing:.12em;text-transform:uppercase;margin-top:4px">SIX-POINT DIAGNOSTICS · AUTO-REFRESHES EVERY 5 MIN · LED = STATUS</p>
+  </div>
+  <div class="lgrid" id="leak-cards"></div>
+</div>
+
+<!-- ══════════ OVERVIEW ══════════ -->
+<div id="p-overview" class="panel">
+  <div class="g5 mb12">
+    <div class="kcard na"><p class="kl">Booked</p><p class="kv" id="kpi-bk">—</p><p class="ks"><span id="kpi-sr">—</span> show rate</p></div>
+    <div class="kcard bl"><p class="kl">Taken</p><p class="kv" id="kpi-tk">—</p><p class="ks"><span id="kpi-or">—</span> offer rate</p></div>
+    <div class="kcard"><p class="kl">Offers</p><p class="kv" id="kpi-of">—</p></div>
+    <div class="kcard"><p class="kl">Closes</p><p class="kv gd big" id="kpi-cl">—</p><p class="ks"><span id="kpi-cr">—</span> close rate</p></div>
+    <div class="kcard rd"><p class="kl">No Shows</p><p class="kv rd" id="kpi-ns">—</p><p class="ks"><span id="kpi-nsr">—</span> NS rate</p></div>
+  </div>
+  <div class="g5 mb12">
+    <div class="kcard"><p class="kl">Follow Ups</p><p class="kv" id="kpi-fu">—</p></div>
+    <div class="kcard or"><p class="kl">Deposits</p><p class="kv" id="kpi-dep">—</p></div>
+    <div class="kcard"><p class="kl">Cancelled</p><p class="kv" id="kpi-can">—</p></div>
+    <div class="kcard"><p class="kl">Avg Deal</p><p class="kv bl" id="kpi-avg">—</p></div>
+    <div class="kcard"><p class="kl">Ad Spend</p><p class="kv" id="kpi-spend">—</p></div>
+  </div>
+  <div class="g3 mb22">
+    <div class="kcard"><p class="kl">Contracted</p><p class="kv bl" id="kpi-sa" style="color:var(--money)">—</p></div>
+    <div class="kcard"><p class="kl">Collected</p><p class="kv gd" id="kpi-rv" style="color:var(--money)">—</p><p class="ks"><span id="kpi-co">—</span> collect rate</p></div>
+    <div class="g2" style="gap:10px">
+      <div class="kcard"><p class="kl">ROAS</p><p class="kv big" id="kpi-roas">—</p></div>
+      <div class="kcard"><p class="kl">CPA</p><p class="kv" id="kpi-cpa">—</p></div>
+    </div>
+  </div>
+  <div class="cc mb14">
+    <p class="eye" style="color:var(--gold)">Revenue Performance</p>
+    <p class="ttl">Contracted vs Collected — 2026</p>
+    <div style="height:220px"><canvas id="ch-rev"></canvas></div>
+  </div>
+  <div class="g4">
+    <div class="mcc"><p class="mt" style="color:var(--b2)">Booked</p><div style="height:90px"><canvas id="ch-bk"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--b3)">Taken</p><div style="height:90px"><canvas id="ch-tk"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--gold)">Offers</p><div style="height:90px"><canvas id="ch-of"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--gold)">Closes</p><div style="height:90px"><canvas id="ch-cl"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--red2)">No Shows</p><div style="height:90px"><canvas id="ch-ns"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--org)">Cancelled</p><div style="height:90px"><canvas id="ch-ca"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--b3)">Follow Ups</p><div style="height:90px"><canvas id="ch-fu"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--gold)">Deposits</p><div style="height:90px"><canvas id="ch-dp"></canvas></div></div>
+  </div>
+</div>
+
+<!-- ══════════ PIPELINE ══════════ -->
+<div id="p-pipeline" class="panel">
+  <div class="cc mb18">
+    <p class="eye" style="color:var(--gold)">Conversion Funnel — YTD</p>
+    <p class="ttl">Booked → Taken → Offered → Closed</p>
+    <div class="frow"><div class="fmeta"><span class="flbl">Sessions Booked</span><span class="fval" id="fp-bk">—</span></div><div class="ftrack"><div class="ffill" id="f-bk"></div></div></div>
+    <div class="frow"><div class="fmeta"><span class="flbl">Sessions Taken</span><span class="fval" id="fp-tk">—</span></div><div class="ftrack"><div class="ffill" id="f-tk"></div></div></div>
+    <div class="frow"><div class="fmeta"><span class="flbl">Offers Made</span><span class="fval" id="fp-of">—</span></div><div class="ftrack"><div class="ffill" id="f-of"></div></div></div>
+    <div class="frow"><div class="fmeta"><span class="flbl">Closes</span><span class="fval" id="fp-cl">—</span></div><div class="ftrack"><div class="ffill" id="f-cl"></div></div></div>
+  </div>
+  <div class="g3 mb14">
+    <div class="rcard"><p class="rl">Show Rate</p><p class="rv" id="r-sr">—</p><p class="rs">Taken ÷ Booked</p></div>
+    <div class="rcard" style="border-left-color:var(--b2)"><p class="rl">Offer Rate</p><p class="rv" id="r-or">—</p><p class="rs">Offered ÷ Taken</p></div>
+    <div class="rcard"><p class="rl">Close Rate</p><p class="rv" id="r-cr">—</p><p class="rs">Closed ÷ Offered</p></div>
+  </div>
+  <!-- MTD / YTD Split -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="cc" style="padding:14px 16px">
+      <p class="eye" style="color:var(--b2);margin-bottom:10px">MTD · This Month</p>
+      <div class="g3" style="gap:8px">
+        <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Booked</p><p class="kv" style="font-size:18px" id="pl-mtd-bk">—</p></div>
+        <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Shows</p><p class="kv" style="font-size:18px" id="pl-mtd-sh">—</p></div>
+        <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Offers</p><p class="kv" style="font-size:18px" id="pl-mtd-of">—</p></div>
+        <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Closes</p><p class="kv gd" style="font-size:18px" id="pl-mtd-cl">—</p></div>
+        <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Contracted</p><p class="kv bl" style="font-size:14px" id="pl-mtd-co">—</p></div>
+        <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Collected</p><p class="kv gd" style="font-size:14px" id="pl-mtd-cd">—</p></div>
+      </div>
+      <p style="margin-top:10px;font-size:10px;color:var(--grey)">Close Rate: <span style="color:var(--gold);font-weight:700" id="pl-mtd-cr">—</span></p>
+    </div>
+    <div class="cc" style="padding:14px 16px">
+      <p class="eye" style="color:var(--gold);margin-bottom:10px">YTD · Full Year</p>
+      <div class="g3" style="gap:8px">
+        <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Booked</p><p class="kv" style="font-size:18px" id="pl-ytd-bk">—</p></div>
+        <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Shows</p><p class="kv" style="font-size:18px" id="pl-ytd-sh">—</p></div>
+        <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Offers</p><p class="kv" style="font-size:18px" id="pl-ytd-of">—</p></div>
+        <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Closes</p><p class="kv gd" style="font-size:18px" id="pl-ytd-cl">—</p></div>
+        <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Contracted</p><p class="kv bl" style="font-size:14px" id="pl-ytd-co">—</p></div>
+        <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Collected</p><p class="kv gd" style="font-size:14px" id="pl-ytd-cd">—</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ REVENUE ══════════ -->
+<div id="p-revenue" class="panel">
+  <div class="cc mb18">
+    <p class="eye" style="color:var(--b2)">Monthly Breakdown</p>
+    <p class="ttl">Contracted vs Collected</p>
+    <div style="height:240px"><canvas id="ch-rvb"></canvas></div>
+  </div>
+  <div class="g3 mb12">
+    <div class="rcard"><p class="rl">YTD Contracted</p><p class="rv" style="font-size:28px" id="rv-co">—</p></div>
+    <div class="rcard" style="border-left-color:var(--gold)"><p class="rl">YTD Collected</p><p class="rv" style="font-size:28px" id="rv-cd">—</p></div>
+    <div class="rcard" style="border-left-color:var(--b2)"><p class="rl">Collect Rate</p><p class="rv" id="rv-cr">—</p></div>
+  </div>
+  <div class="g2 mb12" style="gap:10px">
+    <div class="rcard" style="border-left-color:var(--grey)"><p class="rl">Total Ad Spend</p><p class="rv" style="font-size:20px" id="rv-spend">—</p></div>
+    <div class="rcard" style="border-left-color:var(--grn2)"><p class="rl">ROAS</p><p class="rv big" id="rv-roas">—</p></div>
+  </div>
+  <div class="cc" style="padding:14px 16px;border:1px solid var(--b2)44;border-radius:8px">
+    <p class="eye" style="color:var(--b2);margin-bottom:10px">MTD · This Month</p>
+    <div class="g4" style="gap:8px">
+      <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Closes</p><p class="kv gd" style="font-size:22px" id="rv-mtd-cl">—</p></div>
+      <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Contracted</p><p class="kv bl" style="font-size:14px" id="rv-mtd-co">—</p></div>
+      <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Collected</p><p class="kv gd" style="font-size:14px" id="rv-mtd-cd">—</p></div>
+      <div class="kcard" style="padding:10px"><p class="kl" style="font-size:9px">Collect Rate</p><p class="kv" style="font-size:16px" id="rv-mtd-cr">—</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ JP ══════════ -->
+<div id="p-jp" class="panel">
+  <!-- ── TARGET SETTINGS ── -->
+  <div style="border:1px solid rgba(0,255,136,.2);border-radius:8px;padding:14px 18px;margin-bottom:18px;background:rgba(0,255,136,.04)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <p style="color:#00FF88;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">⚡ Pulse Targets — JP Campbell</p>
+      <p style="color:var(--grey);font-size:8px">Changes update the Pulse page live</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Shows / Day</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(0,255,136,.2);color:#00FF88;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-jp-shows" oninput="setRepTgt('jp','shows',this.value)" placeholder="4"></div>
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Closes / Day</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(0,255,136,.2);color:#00FF88;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-jp-closes" oninput="setRepTgt('jp','closes',this.value)" placeholder="1"></div>
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Contracted ($)</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(0,255,136,.2);color:#00FF88;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-jp-contracted" oninput="setRepTgt('jp','contracted',this.value)" placeholder="5000"></div>
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Collected ($)</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(0,255,136,.2);color:#00FF88;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-jp-collected" oninput="setRepTgt('jp','collected',this.value)" placeholder="5000"></div>
+    </div>
+  </div>
+  <div class="rhdr">
+    <div class="ravatar" style="background:linear-gradient(135deg,var(--gold),#7a5c0a)">JP</div>
+    <div class="rinfo"><h2>JP Campbell</h2><p>Sales Director · High Ticket Closer · $5K+</p></div>
+    <div class="rbadge">Closer</div>
+  </div>
+  <!-- ── JP Targets Panel ────────────────────────── -->
+  <div id="jp-tgt-panel" style="background:rgba(0,232,122,.04);border:1px solid rgba(0,232,122,.2);border-radius:10px;padding:14px 18px;margin-bottom:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <p style="font-size:8px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--money)">⚡ MONTHLY TARGETS — JP Campbell</p>
+      <span style="font-size:7.5px;color:var(--grey);font-style:italic">Auto-saves · Links to Pulse page</span>
+    </div>
+    <div id="jp-tgt-rows"></div>
+  </div>
+  <!-- Close rate ring + stats row -->
+  <div style="display:grid;grid-template-columns:180px 1fr;gap:20px;align-items:center;margin-bottom:18px">
+    <div class="cc" style="padding:12px;text-align:center">
+      <p class="eye" style="color:var(--gold);margin-bottom:8px">Close Rate</p>
+      <div style="height:140px;position:relative"><canvas id="ch-jp-cr"></canvas></div>
+      <p style="font-size:22px;font-weight:700;color:var(--grn2);margin-top:-10px" id="jp-cr-val">—</p>
+    </div>
+    <div class="g3" style="gap:10px">
+      <div class="kcard"><p class="kl">Total Demos</p><p class="kv" id="jp-total">—</p></div>
+      <div class="kcard bl"><p class="kl">Showed</p><p class="kv" id="jp-sh">—</p><p class="ks"><span id="jp-sr">—</span> show rate</p></div>
+      <div class="kcard"><p class="kl">Offers Made</p><p class="kv" id="jp-of">—</p><p class="ks"><span id="jp-or">—</span> offer rate</p></div>
+      <div class="kcard"><p class="kl">Closes</p><p class="kv gd big" id="jp-cl">—</p><p class="ks"><span id="jp-cr">—</span> close rate</p></div>
+      <div class="kcard rd"><p class="kl">No Shows</p><p class="kv rd" id="jp-ns2">—</p></div>
+      <div class="kcard"><p class="kl">Avg Deal</p><p class="kv" id="jp-ad">—</p></div>
+    </div>
+  </div>
+  <!-- Outcome breakdown + call funnel donuts -->
+  <div class="g3 mb12" style="gap:14px">
+    <div class="cc" style="padding:12px;text-align:center">
+      <p class="eye" style="color:var(--b2);margin-bottom:6px">PIF / Split / No Close</p>
+      <div style="height:110px"><canvas id="ch-jp-out"></canvas></div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;font-size:9px;flex-wrap:wrap">
+        <span style="color:var(--gold)">⬤ PIF: <b id="jp-pif">—</b></span>
+        <span style="color:var(--b2)">⬤ Split: <b id="jp-split">—</b></span>
+        <span style="color:var(--red2)">⬤ NC: <b id="jp-nc">—</b></span>
+      </div>
+    </div>
+    <div class="cc" style="padding:12px;text-align:center">
+      <p class="eye" style="color:var(--b3);margin-bottom:6px">Show / No Show</p>
+      <div style="height:110px"><canvas id="ch-jp-calls"></canvas></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="kcard" style="border-left-color:var(--money)"><p class="kl">Contracted</p><p class="kv mn" id="jp-co">—</p></div>
+      <div class="kcard" style="border-left-color:var(--money)"><p class="kl">Collected</p><p class="kv mn" id="jp-cd">—</p><p class="ks"><span id="jp-cr2">—</span> collect rate</p></div>
+      <div class="kcard" style="border-left-color:var(--stat-grn)"><p class="kl">Commission (10%)</p><p class="kv sg" id="jp-com">—</p></div>
+    </div>
+  </div>
+  <div class="g4 mb18">
+    <div class="mcc"><p class="mt" style="color:var(--b2)">Demos Taken</p><div style="height:90px"><canvas id="ch-jp-sh"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--gold)">Closes</p><div style="height:90px"><canvas id="ch-jp-cl"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--navy)">Contracted</p><div style="height:90px"><canvas id="ch-jp-co"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--gold)">Collected</p><div style="height:90px"><canvas id="ch-jp-cd"></canvas></div></div>
+  </div>
+  <div class="cc">
+    <p class="eye" style="color:var(--gold)">Full Closer Log — Every Demo</p>
+    <p class="ttl">High Ticket · $5K+</p>
+    <div style="overflow-x:auto">
+      <table class="dtbl"><thead><tr><th>Date</th><th>Prospect</th><th>Setter</th><th>Showed</th><th>Offered</th><th>Closed</th><th>Contracted</th><th>Collected</th><th>Notes</th></tr></thead>
+      <tbody id="jp-tbl"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ LIZ ══════════ -->
+<div id="p-liz" class="panel">
+  <!-- ── TARGET SETTINGS ── -->
+  <div style="border:1px solid rgba(0,196,255,.2);border-radius:8px;padding:14px 18px;margin-bottom:18px;background:rgba(0,196,255,.04)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <p style="color:#00C4FF;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">⚡ Pulse Targets — Liz</p>
+      <p style="color:var(--grey);font-size:8px">Changes update the Pulse page live</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Inbound / Day</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(0,196,255,.2);color:#00C4FF;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-liz-inbound" oninput="setRepTgt('liz','inbound',this.value)" placeholder="150"></div>
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Convos / Day</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(0,196,255,.2);color:#00C4FF;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-liz-convos" oninput="setRepTgt('liz','convos',this.value)" placeholder="80"></div>
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Qualified / Day</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(0,196,255,.2);color:#00C4FF;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-liz-qualified" oninput="setRepTgt('liz','qualified',this.value)" placeholder="20"></div>
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Booked / Day</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(0,196,255,.2);color:#00C4FF;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-liz-booked" oninput="setRepTgt('liz','booked',this.value)" placeholder="5"></div>
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Shows / Day</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(0,196,255,.2);color:#00C4FF;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-liz-shows" oninput="setRepTgt('liz','shows',this.value)" placeholder="4"></div>
+    </div>
+  </div>
+  <div class="rhdr">
+    <div class="ravatar" style="background:linear-gradient(135deg,var(--b2),#1a3a8a)">LB</div>
+    <div class="rinfo"><h2>Liz</h2><p>DM Setter · DDBA Pipeline</p></div>
+    <div class="rbadge">DM Setter</div>
+  </div>
+  <!-- ── Liz Targets Panel ────────────────────────── -->
+  <div id="liz-tgt-panel" style="background:rgba(168,85,247,.04);border:1px solid rgba(168,85,247,.2);border-radius:10px;padding:14px 18px;margin-bottom:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <p style="font-size:8px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--ch3)">⚡ MONTHLY TARGETS — Liz</p>
+      <span style="font-size:7.5px;color:var(--grey);font-style:italic">Auto-saves · Links to Pulse page</span>
+    </div>
+    <div id="liz-tgt-rows"></div>
+  </div>
+  <div class="g5 mb12">
+    <div class="kcard bl"><p class="kl">Booked</p><p class="kv" id="lz-bk">—</p></div>
+    <div class="kcard"><p class="kl">Inbound DMs</p><p class="kv" id="lz-in">—</p></div>
+    <div class="kcard"><p class="kl">Qualified</p><p class="kv" style="color:var(--grn2)" id="lz-ql">—</p><p class="ks"><span style="color:var(--grn2)" id="lz-qr">—</span> qual rate</p></div>
+    <div class="kcard"><p class="kl">Links Sent</p><p class="kv" id="lz-lk">—</p><p class="ks"><span id="lz-br">—</span> book rate</p></div>
+    <div class="kcard"><p class="kl">Shows</p><p class="kv gd" id="lz-sh">—</p><p class="ks"><span id="lz-sr">—</span> show rate</p></div>
+  </div>
+  <div class="g4 mb22">
+    <div class="kcard rd"><p class="kl">No Shows</p><p class="kv rd" id="lz-ns">—</p></div>
+    <div class="kcard"><p class="kl">Outbound DMs</p><p class="kv" id="lz-ob">—</p></div>
+    <div class="kcard or"><p class="kl">Minors Flagged</p><p class="kv" id="lz-mn">—</p></div>
+    <div class="kcard b3"><p class="kl">Convos Started</p><p class="kv" id="lz-cv">—</p></div>
+    <div class="kcard"><p class="kl">Follow-Ups</p><p class="kv" id="lz-fu">—</p></div>
+    <div class="kcard rd"><p class="kl">Disqualified</p><p class="kv rd" id="lz-dq">—</p></div>
+  </div>
+  <div style="border:1px solid rgba(201,162,39,.25);border-radius:8px;padding:12px 16px;margin-bottom:16px;background:rgba(201,162,39,.04)">
+    <p style="color:var(--gold);font-size:9px;font-weight:700;letter-spacing:.08em;margin:0 0 10px">PERSONAL PRODUCTION — Rep Card Only · Not included in org totals</p>
+    <div style="display:grid;grid-template-columns:160px 1fr;gap:16px;align-items:center">
+      <div style="text-align:center">
+        <p style="font-size:9px;color:var(--grey);margin-bottom:6px">Collect Rate</p>
+        <div style="height:110px"><canvas id="ch-lz-pp-cr"></canvas></div>
+        <p style="font-size:11px;color:var(--grey);margin-top:4px"><span style="color:var(--gold);font-weight:700" id="lz-ccr">—</span> collected</p>
+      </div>
+      <div>
+        <div class="g3 mb10" style="gap:8px">
+          <div class="kcard" style="padding:8px"><p class="kl" style="font-size:9px">Closes</p><p class="kv gd" style="font-size:18px" id="lz-cl">—</p><p class="ks" style="font-size:8px"><span id="lz-cr">—</span> close rate</p></div>
+          <div class="kcard" style="padding:8px;border-left-color:var(--money)"><p class="kl" style="font-size:9px">Contracted</p><p class="kv mn" style="font-size:14px" id="lz-co">—</p></div>
+          <div class="kcard" style="padding:8px;border-left-color:var(--money)"><p class="kl" style="font-size:9px">Collected</p><p class="kv mn" style="font-size:14px" id="lz-cd">—</p></div>
+        </div>
+        <div class="g2" style="gap:8px">
+          <div class="mcc"><p class="mt" style="color:var(--b2)">Contracted Trend</p><div style="height:70px"><canvas id="ch-lz-pp-co"></canvas></div></div>
+          <div class="mcc"><p class="mt" style="color:var(--gold)">Collected Trend</p><div style="height:70px"><canvas id="ch-lz-pp-cd"></canvas></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="g4 mb18">
+    <div class="mcc"><p class="mt" style="color:var(--b2)">Inbound DMs</p><div style="height:90px"><canvas id="ch-lz-in"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--grn2)">Qualified</p><div style="height:90px"><canvas id="ch-lz-ql"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--gold)">Booked</p><div style="height:90px"><canvas id="ch-lz-bk"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--gold2)">Shows</p><div style="height:90px"><canvas id="ch-lz-sh"></canvas></div></div>
+  </div>
+  <div class="cc">
+    <p class="eye" style="color:var(--b2)">Liz — Full Log</p><p class="ttl">All Entries</p>
+    <div style="overflow-x:auto">
+      <table class="dtbl"><thead><tr><th>Date</th><th>Platform</th><th>Keywords</th><th>Inbound</th><th>Convos</th><th>Qualified</th><th>Disqual</th><th>Minors</th><th>Booked</th><th>Shows</th><th>No Shows</th><th style="color:var(--gold)">Closes*</th><th style="color:var(--gold)">Contracted*</th><th style="color:var(--gold)">Collected*</th><th>Top Reason</th></tr></thead>
+      <tbody id="lz-tbl"></tbody></table>
+      <p style="color:var(--grey);font-size:8px;margin-top:6px">* Personal production — not included in org totals</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ DOMINIQUE ══════════ -->
+<div id="p-dom" class="panel">
+  <!-- ── TARGET SETTINGS ── -->
+  <div style="border:1px solid rgba(168,85,247,.2);border-radius:8px;padding:14px 18px;margin-bottom:18px;background:rgba(168,85,247,.04)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <p style="color:#A855F7;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">⚡ Pulse Targets — Dominique</p>
+      <p style="color:var(--grey);font-size:8px">Changes update the Pulse page live</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Booked / Day</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(168,85,247,.2);color:#A855F7;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-dom-booked" oninput="setRepTgt('dom','booked',this.value)" placeholder="5"></div>
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Shows / Day</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(168,85,247,.2);color:#A855F7;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-dom-shows" oninput="setRepTgt('dom','shows',this.value)" placeholder="4"></div>
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Closes / Day</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(168,85,247,.2);color:#A855F7;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-dom-closes" oninput="setRepTgt('dom','closes',this.value)" placeholder="2"></div>
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Contracted ($)</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(168,85,247,.2);color:#A855F7;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-dom-contracted" oninput="setRepTgt('dom','contracted',this.value)" placeholder="3000"></div>
+      <div class="fg"><label style="color:var(--grey);font-size:8px">Collected ($)</label><input type="number" min="0" style="width:100%;background:var(--card);border:1px solid rgba(168,85,247,.2);color:#A855F7;border-radius:4px;padding:5px 8px;font-size:11px;font-family:inherit" value="" id="tgt-dom-collected" oninput="setRepTgt('dom','collected',this.value)" placeholder="2500"></div>
+    </div>
+  </div>
+  <div class="rhdr">
+    <div class="ravatar" style="background:linear-gradient(135deg,var(--b3),#0f2a60)">DM</div>
+    <div class="rinfo"><h2>Dominique</h2><p>DM Setter + Closer (All Price Points)</p></div>
+    <div class="rbadge">Setter + Closer</div>
+  </div>
+  <!-- ── Dom Targets Panel ────────────────────────── -->
+  <div id="dom-tgt-panel" style="background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.2);border-radius:10px;padding:14px 18px;margin-bottom:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <p style="font-size:8px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--ch1)">⚡ MONTHLY TARGETS — Dominique</p>
+      <span style="font-size:7.5px;color:var(--grey);font-style:italic">Auto-saves · Links to Pulse page</span>
+    </div>
+    <div id="dom-tgt-rows"></div>
+  </div>
+  <!-- Close rate ring + stats -->
+  <div style="display:grid;grid-template-columns:160px 1fr;gap:20px;align-items:center;margin-bottom:18px">
+    <div class="cc" style="padding:12px;text-align:center">
+      <p class="eye" style="color:var(--gold);margin-bottom:8px">Close Rate</p>
+      <div style="height:120px;position:relative"><canvas id="ch-dm-cr"></canvas></div>
+      <p style="font-size:20px;font-weight:700;color:var(--gold);margin-top:-8px" id="dm-cr-val">—</p>
+    </div>
+    <div class="g3" style="gap:10px">
+      <div class="kcard bl"><p class="kl">Sets Booked</p><p class="kv" id="dm-bk">—</p></div>
+      <div class="kcard"><p class="kl">Inbound DMs</p><p class="kv" id="dm-in">—</p></div>
+      <div class="kcard"><p class="kl">Qualified</p><p class="kv" style="color:var(--grn2)" id="dm-ql">—</p><p class="ks"><span style="color:var(--grn2)" id="dm-qr">—</span> qual rate</p></div>
+      <div class="kcard"><p class="kl">Shows</p><p class="kv gd" id="dm-sh">—</p><p class="ks"><span id="dm-sr">—</span> show rate</p></div>
+      <div class="kcard rd"><p class="kl">No Shows</p><p class="kv rd" id="dm-ns">—</p></div>
+      <div class="kcard"><p class="kl">Convos</p><p class="kv" id="dm-cv">—</p></div>
+    </div>
+  </div>
+  <div class="g3 mb12" style="gap:14px">
+    <div class="cc" style="padding:12px;text-align:center">
+      <p class="eye" style="color:var(--b2);margin-bottom:6px">DM Funnel</p>
+      <div style="height:120px"><canvas id="ch-dm-funnel"></canvas></div>
+      <div style="display:flex;gap:6px;justify-content:center;margin-top:6px;font-size:8px;flex-wrap:wrap">
+        <span style="color:var(--gold)">⬤ Booked</span>
+        <span style="color:var(--b3)">⬤ Qualified</span>
+        <span style="color:var(--b2)">⬤ Convos</span>
+        <span style="color:var(--b2)44">⬤ Inbound</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="kcard"><p class="kl">Offers</p><p class="kv" id="dm-of">—</p></div>
+      <div class="kcard"><p class="kl">Closes</p><p class="kv gd" id="dm-cl">—</p><p class="ks"><span id="dm-cr">—</span> close rate</p></div>
+      <div class="kcard or"><p class="kl">Minors Flagged</p><p class="kv" id="dm-mn">—</p></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="kcard" style="border-left-color:var(--money)"><p class="kl">Contracted</p><p class="kv mn" id="dm-co">—</p></div>
+      <div class="kcard" style="border-left-color:var(--money)"><p class="kl">Collected</p><p class="kv mn" id="dm-cd">—</p><p class="ks"><span id="dm-ccr">—</span> collect rate</p></div>
+      <div class="kcard"><p class="kl">Follow-Ups</p><p class="kv" id="dm-fu">—</p></div>
+    </div>
+  </div>
+  <div class="g4 mb18">
+    <div class="mcc"><p class="mt" style="color:var(--b2)">Inbound</p><div style="height:80px"><canvas id="ch-dm-in"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--grn2)">Qualified</p><div style="height:80px"><canvas id="ch-dm-ql"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--b3)">Booked</p><div style="height:80px"><canvas id="ch-dm-bk"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--gold2)">Shows</p><div style="height:80px"><canvas id="ch-dm-sh"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--gold)">Closes</p><div style="height:80px"><canvas id="ch-dm-cl"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--b2)">Contracted</p><div style="height:80px"><canvas id="ch-dm-co"></canvas></div></div>
+    <div class="mcc"><p class="mt" style="color:var(--gold)">Collected</p><div style="height:80px"><canvas id="ch-dm-cd"></canvas></div></div>
+  </div>
+  <div class="cc">
+    <p class="eye" style="color:var(--b3)">Dominique — Full Log</p><p class="ttl">Setter + Closer Combined</p>
+    <div style="overflow-x:auto">
+      <table class="dtbl"><thead><tr><th>Date</th><th>Platform</th><th>Keywords</th><th>Inbound</th><th>Qualified</th><th>Minors</th><th>Booked</th><th>Shows</th><th>Closes</th><th>Contracted</th><th>Collected</th><th>Fix Tomorrow</th></tr></thead>
+      <tbody id="dm-tbl"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MARKETING PULSE ══════════ -->
+<div id="p-marketing" class="panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div class="sec-hdr" style="margin:0">📈 Marketing Pulse — Frank DeLuca</div>
+    <div class="ptog mk-tog">
+      <button data-p="daily"   onclick="setMkPeriod('daily')">Daily</button>
+      <button data-p="weekly"  onclick="setMkPeriod('weekly')">Weekly</button>
+      <button data-p="monthly" class="active" onclick="setMkPeriod('monthly')">Monthly</button>
+      <button data-p="overall" onclick="setMkPeriod('overall')">All Time</button>
+    </div>
+  </div>
+
+  <!-- ROAS HERO -->
+  <div style="display:flex;align-items:center;gap:12px;background:var(--deep);border:1px solid var(--gold-t);border-radius:8px;padding:16px 20px;margin-bottom:16px">
+    <div style="flex:0 0 180px;text-align:center">
+      <p style="color:var(--grey);font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin:0 0 4px">ROAS</p>
+      <p id="mk-roas" style="font-size:48px;font-weight:900;color:var(--gold);margin:0;font-family:'Syne',sans-serif;line-height:1">—</p>
+      <p style="color:var(--grey);font-size:8px;margin:4px 0 0">Revenue ÷ Ad Spend</p>
+    </div>
+    <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="kc"><p class="kl">Total Ad Spend</p><p class="kv" id="mk-spend">—</p></div>
+      <div class="kc"><p class="kl">Total Revenue</p><p class="kv wh" id="mk-rev">—</p></div>
+      <div class="kc"><p class="kl">Cash Collected</p><p class="kv" id="mk-cash">—</p></div>
+      <div class="kc"><p class="kl">Recurring Cash</p><p class="kv" id="mk-rec">—</p></div>
+    </div>
+  </div>
+
+  <!-- KEY METRICS — matching screenshot 3 exactly -->
+  <div class="g4" style="margin-bottom:16px">
+    <div class="kc"><p class="kl">Total SS Taken</p><p class="kv wh" id="mk-demos">—</p></div>
+    <div class="kc"><p class="kl">Close Rate From Calls</p><p class="kv" style="color:var(--grn2)" id="mk-cr">—</p></div>
+    <div class="kc"><p class="kl">Cost Per Close</p><p class="kv" id="mk-cpp">—</p></div>
+    <div class="kc"><p class="kl">Lead To Call Booked</p><p class="kv" id="mk-l2c">—</p></div>
+    <div class="kc"><p class="kl">Message To Close</p><p class="kv" id="mk-m2c">—</p></div>
+    <div class="kc"><p class="kl">Cancellation Rate</p><p class="kv" id="mk-canc">—</p></div>
+    <div class="kc"><p class="kl">Cash Per SS Taken</p><p class="kv" id="mk-cpd">—</p></div>
+    <div class="kc"><p class="kl">Cost Per Call Booked</p><p class="kv" id="mk-cpc">—</p></div>
+    <div class="kc"><p class="kl">Cost Per SS Taken</p><p class="kv" id="mk-cpss">—</p></div>
+    <div class="kc"><p class="kl">No Show Rate</p><p class="kv" style="color:var(--org)" id="mk-nsr">—</p></div>
+    <div class="kc"><p class="kl">Total Messages</p><p class="kv" id="mk-msgs">—</p></div>
+    <div class="kc"><p class="kl">Cost Per Message</p><p class="kv" id="mk-cpm">—</p></div>
+    <div class="kc"><p class="kl">Cost Per Acquisition</p><p class="kv" style="color:var(--gold)" id="mk-cpa">—</p></div>
+    <div class="kc"><p class="kl">Deposits / Pay Plans</p><p class="kv" id="mk-dep">—</p></div>
+  </div>
+
+  <!-- TREND CHARTS -->
+  <div class="sec-hdr" style="display:flex;align-items:center;justify-content:space-between">Trends <span id="mk-trend-lbl" style="color:var(--gold);font-size:9px;letter-spacing:.1em;font-weight:400">—</span></div>
+  <div class="g4">
+    <div class="card"><div class="card-hdr">Ad Spend <span id="mk-tr-unit1" style="color:var(--grey)">/day</span></div><div class="ch-wrap"><canvas id="ch-mk-spend"></canvas></div></div>
+    <div class="card"><div class="card-hdr">Messages <span id="mk-tr-unit2" style="color:var(--grey)">/day</span></div><div class="ch-wrap"><canvas id="ch-mk-msgs"></canvas></div></div>
+    <div class="card"><div class="card-hdr">Contracted <span id="mk-tr-unit3" style="color:var(--grey)">/day</span></div><div class="ch-wrap"><canvas id="ch-mk-rev"></canvas></div></div>
+    <div class="card"><div class="card-hdr">ROAS <span id="mk-tr-unit4" style="color:var(--grey)">/period</span></div><div class="ch-wrap"><canvas id="ch-mk-roas"></canvas></div></div>
+  </div>
+</div>
+
+<!-- ══════════ DATA ENTRY ══════════ -->
+<div id="p-entry" class="panel">
+
+  <!-- JP Closer Entry -->
+  <div class="esec" style="border-color:rgba(201,162,39,.35)">
+    <h3 style="color:var(--gold)">JP Campbell — Closer Log Entry</h3>
+    <p class="esub">One entry per demo. Your personal high ticket production record.</p>
+    <div class="erow r4">
+      <div class="fg"><label>Date</label><input type="date" id="jp-dt"></div>
+      <div class="fg"><label>Prospect Name</label><input type="text" id="jp-pr" placeholder="Full name"></div>
+      <div class="fg"><label>Setter</label><select id="jp-st"><option>Liz</option><option>Dominique</option><option>Other</option></select></div>
+      <div class="fg"><label>Showed?</label><select id="jp-sh"><option>Yes</option><option>No Show</option><option>Rescheduled</option></select></div>
+    </div>
+    <div class="erow r4">
+      <div class="fg"><label>Offered?</label><select id="jp-of"><option>Yes</option><option>No</option></select></div>
+      <div class="fg"><label>Closed?</label><select id="jp-cl"><option>Yes - PIF</option><option>Yes - Split</option><option>No</option><option>Follow Up</option></select></div>
+      <div class="fg"><label>Contracted ($)</label><input type="number" id="jp-co" min="0" value="0"></div>
+      <div class="fg"><label>Collected ($)</label><input type="number" id="jp-cd" min="0" value="0"></div>
+    </div>
+    <div class="erow r2">
+      <div class="fg"><label>Notes</label><input type="text" id="jp-nt" placeholder="Objections, follow-up details, context"></div>
+    </div>
+    <div class="brow"><button class="bprim" onclick="saveJP()">Save Entry</button></div>
+    <div class="conf" id="jp-conf">✓ Closer log updated</div>
+  </div>
+
+  <div class="sdiv"></div>
+
+  <!-- Liz Daily Log Entry -->
+  <div class="esec" style="border-color:rgba(43,94,201,.35)">
+    <h3 style="color:var(--b2)">Liz — DM Setter Daily Log</h3>
+    <p class="esub">Matches the ClickUp DM Setting daily form exactly. One entry per day.</p>
+    <div class="erow r4">
+      <div class="fg"><label>Date</label><input type="date" id="lz-dt"></div>
+      <div class="fg"><label>Platform</label><select id="lz-pl"><option>Instagram</option><option>Facebook</option><option>TikTok</option><option>LinkedIn</option><option>Other</option></select></div>
+      <div class="fg"><label>Active Keywords (comma separated)</label><input type="text" id="lz-kw" placeholder="SHARK, SUCCESS, BUILDER…"></div>
+      <div class="fg"></div>
+    </div>
+    <div class="erow r2">
+      <div class="fg"><label>Keyword: Most Blocks</label><input type="text" id="lz-kb" placeholder="e.g. SHARK"></div>
+      <div class="fg"><label>Keyword: Most Links Sent</label><input type="text" id="lz-kl" placeholder="e.g. SUCCESS"></div>
+    </div>
+    <div class="slbl">DM Activity</div>
+    <div class="erow r5">
+      <div class="fg"><label>Inbound DMs</label><input type="number" id="lz-in" min="0" value="0"></div>
+      <div class="fg"><label>New Convos</label><input type="number" id="lz-cv" min="0" value="0"></div>
+      <div class="fg"><label>Qualified</label><input type="number" id="lz-ql" min="0" value="0"></div>
+      <div class="fg"><label>Disqualified</label><input type="number" id="lz-dq" min="0" value="0"></div>
+      <div class="fg"><label>Minors Flagged</label><input type="number" id="lz-mn" min="0" value="0"></div>
+    </div>
+    <div class="erow r2">
+      <div class="fg"><label>Top Disqualification Reason</label><input type="text" id="lz-dr" placeholder="e.g. No capital, Not serious…"></div>
+      <div class="fg"></div>
+    </div>
+    <div class="slbl">Booking</div>
+    <div class="erow r3">
+      <div class="fg"><label>Booking Links Sent</label><input type="number" id="lz-lk" min="0" value="0"></div>
+      <div class="fg"><label>Calls Booked Today</label><input type="number" id="lz-bk" min="0" value="0"></div>
+      <div class="fg"></div>
+    </div>
+    <div class="slbl">Response &amp; Follow-Up</div>
+    <div class="erow r3">
+      <div class="fg"><label>Avg First Response (min)</label><input type="number" id="lz-af" min="0" value="0"></div>
+      <div class="fg"><label>Avg Convo Response (min)</label><input type="number" id="lz-ac" min="0" value="0"></div>
+      <div class="fg"><label>Follow-Ups Sent</label><input type="number" id="lz-fu" min="0" value="0"></div>
+    </div>
+    <div class="slbl">Outbound</div>
+    <div class="erow r2">
+      <div class="fg"><label>Outbound DMs Sent</label><input type="number" id="lz-ob" min="0" value="0"></div>
+      <div class="fg"><label>Outbound Follow-Up Responses</label><input type="number" id="lz-of2" min="0" value="0"></div>
+    </div>
+    <div class="slbl">Results</div>
+    <div class="erow r2">
+      <div class="fg"><label>Shows (from her sets)</label><input type="number" id="lz-sh" min="0" value="0"></div>
+      <div class="fg"><label>No Shows (from her sets)</label><input type="number" id="lz-ns" min="0" value="0"></div>
+    </div>
+    <div class="slbl">Notes</div>
+    <div class="erow r2">
+      <div class="fg"><label>#1 Reason Prospects Didn't Book</label><input type="text" id="lz-nr" placeholder="e.g. Need to think about it"></div>
+      <div class="fg"><label>One Fix for Tomorrow</label><input type="text" id="lz-fx" placeholder="e.g. Follow up sooner on link sends"></div>
+    </div>
+    <div class="slbl" style="color:var(--gold)">Personal Production — Rep Card Only (not included in org totals)</div>
+    <div class="erow r3">
+      <div class="fg"><label>Closes</label><input type="number" id="lz-cl-in" min="0" value="0"></div>
+      <div class="fg"><label>Contracted ($)</label><input type="number" id="lz-co-in" min="0" value="0"></div>
+      <div class="fg"><label>Collected ($)</label><input type="number" id="lz-cd-in" min="0" value="0"></div>
+    </div>
+    <div class="brow"><button class="bprim" onclick="saveLiz()">Save Liz Log</button></div>
+    <div class="conf" id="lz-conf">✓ Liz log saved — pulse and leak detector updated</div>
+  </div>
+
+  <div class="sdiv"></div>
+
+  <!-- Dominique Daily Log Entry -->
+  <div class="esec" style="border-color:rgba(30,75,158,.4)">
+    <h3 style="color:var(--b3)">Dominique — DM Setter &amp; Closer Daily Log</h3>
+    <p class="esub">Full ClickUp form — setter fields plus closer fields. One entry per day.</p>
+    <div class="erow r4">
+      <div class="fg"><label>Date</label><input type="date" id="dm-dt"></div>
+      <div class="fg"><label>Platform</label><select id="dm-pl"><option>Instagram</option><option>Facebook</option><option>TikTok</option><option>LinkedIn</option><option>Other</option></select></div>
+      <div class="fg"><label>Active Keywords (comma separated)</label><input type="text" id="dm-kw" placeholder="BUILDER, MENTOR, APPLY…"></div>
+      <div class="fg"></div>
+    </div>
+    <div class="erow r2">
+      <div class="fg"><label>Keyword: Most Blocks</label><input type="text" id="dm-kb" placeholder="e.g. BUILDER"></div>
+      <div class="fg"><label>Keyword: Most Links Sent</label><input type="text" id="dm-kl" placeholder="e.g. MENTOR"></div>
+    </div>
+    <div class="slbl">DM Activity</div>
+    <div class="erow r5">
+      <div class="fg"><label>Inbound DMs</label><input type="number" id="dm-in" min="0" value="0"></div>
+      <div class="fg"><label>New Convos</label><input type="number" id="dm-cv" min="0" value="0"></div>
+      <div class="fg"><label>Qualified</label><input type="number" id="dm-ql" min="0" value="0"></div>
+      <div class="fg"><label>Disqualified</label><input type="number" id="dm-dq" min="0" value="0"></div>
+      <div class="fg"><label>Minors Flagged</label><input type="number" id="dm-mn" min="0" value="0"></div>
+    </div>
+    <div class="erow r2">
+      <div class="fg"><label>Top Disqualification Reason</label><input type="text" id="dm-dr" placeholder="e.g. No capital"></div>
+      <div class="fg"></div>
+    </div>
+    <div class="slbl">Booking</div>
+    <div class="erow r3">
+      <div class="fg"><label>Booking Links Sent</label><input type="number" id="dm-lk" min="0" value="0"></div>
+      <div class="fg"><label>Calls Booked Today</label><input type="number" id="dm-bk" min="0" value="0"></div>
+      <div class="fg"></div>
+    </div>
+    <div class="slbl">Response &amp; Follow-Up</div>
+    <div class="erow r3">
+      <div class="fg"><label>Avg First Response (min)</label><input type="number" id="dm-af" min="0" value="0"></div>
+      <div class="fg"><label>Avg Convo Response (min)</label><input type="number" id="dm-ac" min="0" value="0"></div>
+      <div class="fg"><label>Follow-Ups Sent</label><input type="number" id="dm-fu" min="0" value="0"></div>
+    </div>
+    <div class="slbl">Outbound</div>
+    <div class="erow r2">
+      <div class="fg"><label>Outbound DMs Sent</label><input type="number" id="dm-ob" min="0" value="0"></div>
+      <div class="fg"><label>Outbound Follow-Up Responses</label><input type="number" id="dm-of2" min="0" value="0"></div>
+    </div>
+    <div class="slbl">Results — Setter</div>
+    <div class="erow r2">
+      <div class="fg"><label>Shows (from his sets)</label><input type="number" id="dm-sh" min="0" value="0"></div>
+      <div class="fg"><label>No Shows (from his sets)</label><input type="number" id="dm-ns" min="0" value="0"></div>
+    </div>
+    <div class="slbl">Closer Fields (All Price Points)</div>
+    <div class="erow r4">
+      <div class="fg"><label>Offers</label><input type="number" id="dm-of3" min="0" value="0"></div>
+      <div class="fg"><label>Closes</label><input type="number" id="dm-cl" min="0" value="0"></div>
+      <div class="fg"><label>Contracted ($)</label><input type="number" id="dm-co-in" min="0" value="0"></div>
+      <div class="fg"><label>Collected ($)</label><input type="number" id="dm-cd-in" min="0" value="0"></div>
+    </div>
+    <div class="slbl">Notes</div>
+    <div class="erow r2">
+      <div class="fg"><label>#1 Reason Prospects Didn't Book</label><input type="text" id="dm-nr" placeholder="e.g. Timing issue"></div>
+      <div class="fg"><label>One Fix for Tomorrow</label><input type="text" id="dm-fx" placeholder="e.g. More urgency in qualification"></div>
+    </div>
+    <div class="brow"><button class="bprim" onclick="saveDom()">Save Dom Log</button></div>
+    <div class="conf" id="dm-conf">✓ Dominique log saved — pulse and leak detector updated</div>
+  </div>
+
+  <div class="sdiv"></div>
+
+  <!-- Frank Ad Log Entry -->
+  <div class="esec" style="border-color:rgba(201,162,39,.3)">
+    <h3 style="color:var(--gold)">Frank — Ad Log</h3>
+    <p class="esub">Ad Spend · Messages · Reach · Notes. That's it. Everything else pulls automatically from rep logs.</p>
+    <div class="erow r4">
+      <div class="fg"><label>Date</label><input type="date" id="fk-dt"></div>
+      <div class="fg"><label>Ad Spend ($)</label><input type="number" id="fk-sp" min="0" step="0.01" value="0" placeholder="0.00"></div>
+      <div class="fg"><label>Messages (Leads)</label><input type="number" id="fk-mg" min="0" value="0"></div>
+      <div class="fg"><label>Reach</label><input type="number" id="fk-rc" min="0" value="0"></div>
+    </div>
+    <div class="slbl">Campaign Notes</div>
+    <div class="erow r1">
+      <div class="fg" style="grid-column:1/-1"><label>Daily Notes / Key Wins / Issues</label><textarea id="fk-nt" rows="3" placeholder="e.g. New ad creative launched, BUILDER keyword outperforming — CPM dropped to $6.20. Paused low-performing ad set." style="width:100%;background:var(--card);border:1px solid var(--border);color:#fff;border-radius:6px;padding:10px;font-size:12px;resize:vertical;font-family:inherit"></textarea></div>
+    </div>
+    <div class="brow"><button class="bprim" onclick="saveFrank()">Save Frank Ad Log</button></div>
+    <div class="conf" id="fk-conf">✓ Frank ad log saved — marketing pulse updated</div>
+  </div>
+
+</div><!-- /main -->
+
+<div id="ftr">
+  <p>DDBA 5.2 · DELUCA DESIGNS LLC · <span>INVENT YOUR FUTURE.</span></p>
+  <p>DISCIPLINE BEATS INSPIRATION. SYSTEMS BEAT TALENT.</p>
+</div>
+
+</div>
+</body>
+</html>
